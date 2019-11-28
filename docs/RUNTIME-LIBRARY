@@ -1,0 +1,15 @@
+string.h
+memory.h	includes allocators
+instant.h	only deals with exact instants in time relative to UTC
+duration.h	only deals with exact differences between instants
+datetime.h	deals with all the messy crap around time zones
+hash.h		only deals with hashing (not hash tables)
+lock.h		only provides locking (avoid if at all possible)
+hashtable.h
+queue.h
+iterator.h
+random.h
+stream.h
+convert.h
+error.h
+locale.h

@@ -1,0 +1,23 @@
+This document describes the order in which parts of vine are being implemented.
+
+vine's ultimate goals have some shared, common parts, hence being included as
+parts of one greater project instead of being separate projects. 
+
+The goal is that the constituent parts (text editing, web browsing, mail
+reading, image viewing, etc.) have core mechanism in common that can be
+implemented in C.
+
+The first step is to implement a runtime environment which will form the basis
+for the Vine VM and as a general programming library for the C code. This
+runtime environment will provide for safe light-weight tasks along with a
+general library with strings, pointers, allocators, date and time, string
+views, hashing, hash tables, queues, iterators, random number generation, safe
+i/o, string conversions, error handling, localisation, etc.
+
+The second step is probably to render a text-based interface using C. Many
+different components of vine require the ability to render a pane of simple
+monospaced text, most prominently text editing and terminal emulation. So the
+first step is to render text in a window. It all flows on from there. In the
+future it would be nice to write an efficient hardware-accelerated engine for
+doing text layout, font rendering, hinting, etc. Until then, we'll just use
+Cairo + Pango.
