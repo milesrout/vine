@@ -27,4 +27,33 @@
  * We also have strings in the style of C++'s 'std::string', consisting of a
  * length and a pointer to a heap-allocated array of characters that can be
  * reallocated when the string needs to be resized.
+ *
+ * Then there are ropes. Ropes are most suitable for very large strings that
+ * have to change a lot.
  */
+struct str {
+	size_t s_len;
+	char  *s_str;
+};
+struct strbuf {
+	size_t sb_len;
+	size_t sb_cap;
+	char  *sb_str;
+};
+void strbuf_init(struct strbuf *);
+void strbuf_init_with_capacity(struct strbuf *, size_t);
+void strbuf_finish(struct strbuf *);
+void strbuf_expand(struct strbuf *);
+void strbuf_expand_to(struct strbuf *, size_t);
+void strbuf_expand_by(struct strbuf *, size_t);
+void strbuf_append_char(struct strbuf *, char);
+void strbuf_append_cstring(struct strbuf *, const char *);
+void strbuf_shrink_to_fit(struct strbuf *);
+const char *strbuf_as_cstring(struct strbuf *);
+struct string {
+	size_t str_cap;
+	char   str_str[1];
+};
+struct string *string_create(size_t);
+struct string *string_expand(struct string *, size_t);
+void string_destroy(struct string *);

@@ -1,31 +1,42 @@
+#include <stdarg.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include "_memory.h"
 
 #include "abort.h"
+#include "alloc.h"
+#include "printf.h"
 
-void *emalloc(size_t n)
+void *try_allocate(size_t m)
 {
-	void *p = malloc(n);
+	return allocate_with(&sys_alloc, m);
+}
+
+void *allocate(size_t m)
+{
+	void *p = try_allocate(m);
 	if (p == NULL)
 		abort_with_error("Memory allocation failure\n");
 
 	return p;
 }
 
-void *ecalloc(size_t n, size_t m)
+void *try_reallocate(void *q, size_t m, size_t n)
 {
-	void *p = calloc(n, m);
+	return reallocate_with(&sys_alloc, q, m, n);
+}
+
+void *reallocate(void *q, size_t m, size_t n)
+{
+	void *p = try_reallocate(q, m, n);
 	if (p == NULL)
 		abort_with_error("Memory allocation failure\n");
 
 	return p;
 }
 
-void *erealloc(void *q, size_t n)
+void deallocate(void *p, size_t m)
 {
-	void *p = realloc(q, n);
-	if (p == NULL)
-		abort_with_error("Memory allocation failure\n");
-
-	return p;
+	deallocate_with(&sys_alloc, p, m);
 }

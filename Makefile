@@ -12,7 +12,7 @@ DEPS      := $(OBJS:%.o=%.d)
 
 INCS      := $(addprefix -I,$(shell find ./include -type d))
 
-CFLAGS    += $(INCS) -MMD -MP -pedantic -pedantic-errors -std=c89
+CFLAGS    += -D_POSIX_C_SOURCE $(INCS) -MMD -MP -pedantic -pedantic-errors -std=c89
 LDLIBS    += -lm
 
 build/$(TARGET): $(OBJS)
