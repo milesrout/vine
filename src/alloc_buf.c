@@ -2,40 +2,64 @@
 #include <stdlib.h>
 #include <string.h>
 #include "_memory.h"
+#include <stdio.h>
+#include "printf.h"
 
 #include "alloc.h"
 #include "alloc_buf.h"
 
 static void *buf_allocate(struct alloc *alloc, size_t m)
 {
-	char *result;
 	struct buf_alloc *ba = (struct buf_alloc *)alloc;
 	if (ba->ba_cap < m) {
 		return NULL;
 	}
 
-	result = ba->ba_buf;
-	ba->ba_cap += m;
-	ba->ba_buf += m;
+	efprintf(stderr, "buf_allocate(%llu):\n", m);
+	efprintf(stderr, "\tbefore: {.last=%p, .cur=%p, .cap=%llu}\n",
+			 ba->ba_last, ba->ba_cur, ba->ba_cap);
+	ba->ba_last = ba->ba_cur;
+	ba->ba_cap -= m;
+	ba->ba_cur += m;
+	efprintf(stderr, "\tafter: {.last=%p, .cur=%p, .cap=%llu}\n",
+			 ba->ba_last, ba->ba_cur, ba->ba_cap);
 
-	return result;
+	return ba->ba_last;
 }
 
 static void *buf_reallocate(struct alloc *alloc, void *q, size_t m, size_t n)
 {
-	(void)alloc;
-	(void)q;
-	(void)m;
-	(void)n;
-	return NULL;
+	struct buf_alloc *ba = (struct buf_alloc *)alloc;
+	if (q == ba->ba_last) {
+		efprintf(stderr, "buf_reallocate(%p, %llu, %llu)[fast]:\n",
+				 q, m, n);
+		efprintf(stderr, "\tbefore: {.last=%p, .cur=%p, .cap=%llu}\n",
+				 ba->ba_last, ba->ba_cur, ba->ba_cap);
+		ba->ba_cur = (char *)q + (n - m);
+		ba->ba_cap -= (n - m);
+		efprintf(stderr, "\tafter: {.last=%p, .cur=%p, .cap=%llu}\n",
+				 ba->ba_last, ba->ba_cur, ba->ba_cap);
+		return q;
+	} else {
+		char *new;
+		efprintf(stderr, "buf_reallocate(%p, %llu, %llu)[slow]:\n",
+				 q, m, n);
+		new = buf_allocate(alloc, n);
+		if (new == NULL) {
+			return NULL;
+		}
+		memcpy(new, q, m);
+		return new;
+	}
 }
 
 static void buf_deallocate(struct alloc *alloc, void *p, size_t n)
 {
-	(void)alloc;
-	(void)p;
-	(void)n;
-	return;
+	struct buf_alloc *ba = (struct buf_alloc *)alloc;
+	if (p == ba->ba_last) {
+		ba->ba_cur = p;
+		ba->ba_cap += n;
+	}
 }
 
 static struct alloc_vtable buf_alloc_vtable = {
@@ -43,12 +67,14 @@ static struct alloc_vtable buf_alloc_vtable = {
 	buf_reallocate,
 	buf_deallocate
 };
+
 static struct alloc ba_alloc = {&buf_alloc_vtable};
 
 void buf_alloc_init(struct buf_alloc *ba, char *buf, size_t cap)
 {
 	ba->ba_alloc = ba_alloc;
-	ba->ba_buf = buf;
+	ba->ba_last = buf;
+	ba->ba_cur = buf;
 	ba->ba_cap = cap;
 }
 

@@ -43,12 +43,47 @@ int main()
 	}
 
 	{
-		struct strbuf sb1;
-		strbuf_init(&sb1);
-		strbuf_append_cstring(&sb1, "Miles");
-		strbuf_append_char(&sb1, '!');
-		efprintf(stdout, "Hello, %s\n", strbuf_as_cstring(&sb1));
-		strbuf_finish(&sb1);
+		struct strbuf sb;
+		strbuf_init(&sb);
+		strbuf_append_cstring(&sb, "Miles");
+		strbuf_append_char(&sb, '!');
+		efprintf(stdout, "Hello, %s\n", strbuf_as_cstring(&sb));
+		strbuf_finish(&sb);
+	}
+
+	{
+		char buf[1024];
+		struct buf_alloc ba;
+		struct strbuf sb;
+
+		buf_alloc_init(&ba, buf, 1024);
+
+		strbuf_init_with(&sb, &ba.ba_alloc, 0);
+		efprintf(stderr, "1\n");
+		strbuf_append_cstring(&sb, "abcdefghijklmnopqrstuvwxyz ");
+		efprintf(stderr, "2\n");
+		strbuf_append_cstring(&sb, "abcdefghijklmnopqrstuvwxyz ");
+		efprintf(stderr, "3\n");
+		strbuf_append_cstring(&sb, "abcdefghijklmnopqrstuvwxyz ");
+		efprintf(stderr, "4\n");
+		strbuf_append_cstring(&sb, "abcdefghijklmnopqrstuvwxyz ");
+		efprintf(stderr, "5\n");
+		strbuf_append_cstring(&sb, "abcdefghijklmnopqrstuvwxyz ");
+		efprintf(stderr, "6\n");
+		strbuf_append_cstring(&sb, "abcdefghijklmnopqrstuvwxyz ");
+		efprintf(stderr, "7\n");
+		strbuf_append_cstring(&sb, "abcdefghijklmnopqrstuvwxyz ");
+		efprintf(stderr, "8\n");
+		strbuf_append_cstring(&sb, "abcdefghijklmnopqrstuvwxyz ");
+		efprintf(stderr, "9\n");
+		strbuf_append_cstring(&sb, "abcdefghijklmnopqrstuvwxyz ");
+		efprintf(stderr, "10\n");
+		strbuf_append_cstring(&sb, "Miles");
+		efprintf(stderr, "11\n");
+		strbuf_append_char(&sb, '!');
+		efprintf(stderr, "12\n");
+		efprintf(stdout, "Hello, %s\n", strbuf_as_cstring(&sb));
+		strbuf_finish(&sb);
 	}
 
 	{

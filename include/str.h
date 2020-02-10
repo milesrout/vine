@@ -36,12 +36,13 @@ struct str {
 	char  *s_str;
 };
 struct strbuf {
-	size_t sb_len;
-	size_t sb_cap;
-	char  *sb_str;
+	struct alloc *sb_alloc;
+	size_t        sb_len;
+	size_t        sb_cap;
+	char         *sb_str;
 };
 void strbuf_init(struct strbuf *);
-void strbuf_init_with_capacity(struct strbuf *, size_t);
+void strbuf_init_with(struct strbuf *, struct alloc *, size_t);
 void strbuf_finish(struct strbuf *);
 void strbuf_expand(struct strbuf *);
 void strbuf_expand_to(struct strbuf *, size_t);
