@@ -15,14 +15,9 @@ static void *buf_allocate(struct alloc *alloc, size_t m)
 		return NULL;
 	}
 
-	efprintf(stderr, "buf_allocate(%llu):\n", m);
-	efprintf(stderr, "\tbefore: {.last=%p, .cur=%p, .cap=%llu}\n",
-			 ba->ba_last, ba->ba_cur, ba->ba_cap);
 	ba->ba_last = ba->ba_cur;
 	ba->ba_cap -= m;
 	ba->ba_cur += m;
-	efprintf(stderr, "\tafter: {.last=%p, .cur=%p, .cap=%llu}\n",
-			 ba->ba_last, ba->ba_cur, ba->ba_cap);
 
 	return ba->ba_last;
 }
@@ -31,20 +26,11 @@ static void *buf_reallocate(struct alloc *alloc, void *q, size_t m, size_t n)
 {
 	struct buf_alloc *ba = (struct buf_alloc *)alloc;
 	if (q == ba->ba_last) {
-		efprintf(stderr, "buf_reallocate(%p, %llu, %llu)[fast]:\n",
-				 q, m, n);
-		efprintf(stderr, "\tbefore: {.last=%p, .cur=%p, .cap=%llu}\n",
-				 ba->ba_last, ba->ba_cur, ba->ba_cap);
 		ba->ba_cur = (char *)q + (n - m);
 		ba->ba_cap -= (n - m);
-		efprintf(stderr, "\tafter: {.last=%p, .cur=%p, .cap=%llu}\n",
-				 ba->ba_last, ba->ba_cur, ba->ba_cap);
 		return q;
 	} else {
-		char *new;
-		efprintf(stderr, "buf_reallocate(%p, %llu, %llu)[slow]:\n",
-				 q, m, n);
-		new = buf_allocate(alloc, n);
+		char *new = buf_allocate(alloc, n);
 		if (new == NULL) {
 			return NULL;
 		}
