@@ -1,2 +1,4 @@
 build/
 vine
+.syntastic_c_config
+tags

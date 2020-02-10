@@ -4,13 +4,15 @@
 
 #include "alloc.h"
 
-static void *sys_allocate(struct alloc *a, size_t m)
+static void *
+sys_allocate(struct alloc *a, size_t m)
 {
 	(void)a;
 	return calloc(m, 1);
 }
 
-static void *sys_reallocate(struct alloc *a, void *q, size_t m, size_t n)
+static void *
+sys_reallocate(struct alloc *a, void *q, size_t m, size_t n)
 {
 	void *p = realloc(q, n);
 	(void)a;
@@ -20,7 +22,8 @@ static void *sys_reallocate(struct alloc *a, void *q, size_t m, size_t n)
 	return p;
 }
 
-static void sys_deallocate(struct alloc *a, void *p, size_t n)
+static void
+sys_deallocate(struct alloc *a, void *p, size_t n)
 {
 	/* At the moment we don't support the kind of complex size-aware allocators
 	 * that require us to pass the size of the allocated chunk of memory to the
@@ -31,10 +34,12 @@ static void sys_deallocate(struct alloc *a, void *p, size_t n)
 	free(p);
 }
 
-static struct alloc_vtable sys_alloc_vtable = {
+static struct alloc_vtable
+sys_alloc_vtable = {
 	&sys_allocate,
 	&sys_reallocate,
 	&sys_deallocate
 };
 
-struct alloc sys_alloc = {&sys_alloc_vtable};
+struct alloc
+sys_alloc = {&sys_alloc_vtable};

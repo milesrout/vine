@@ -8,7 +8,8 @@
 #include "alloc.h"
 #include "alloc_buf.h"
 
-static void *buf_allocate(struct alloc *alloc, size_t m)
+static void *
+buf_allocate(struct alloc *alloc, size_t m)
 {
 	struct buf_alloc *ba = (struct buf_alloc *)alloc;
 	if (ba->ba_cap < m) {
@@ -22,7 +23,8 @@ static void *buf_allocate(struct alloc *alloc, size_t m)
 	return ba->ba_last;
 }
 
-static void *buf_reallocate(struct alloc *alloc, void *q, size_t m, size_t n)
+static void *
+buf_reallocate(struct alloc *alloc, void *q, size_t m, size_t n)
 {
 	struct buf_alloc *ba = (struct buf_alloc *)alloc;
 	if (q == ba->ba_last) {
@@ -39,7 +41,8 @@ static void *buf_reallocate(struct alloc *alloc, void *q, size_t m, size_t n)
 	}
 }
 
-static void buf_deallocate(struct alloc *alloc, void *p, size_t n)
+static void
+buf_deallocate(struct alloc *alloc, void *p, size_t n)
 {
 	struct buf_alloc *ba = (struct buf_alloc *)alloc;
 	if (p == ba->ba_last) {
@@ -48,15 +51,18 @@ static void buf_deallocate(struct alloc *alloc, void *p, size_t n)
 	}
 }
 
-static struct alloc_vtable buf_alloc_vtable = {
+static struct alloc_vtable
+buf_alloc_vtable = {
 	buf_allocate,
 	buf_reallocate,
 	buf_deallocate
 };
 
-static struct alloc ba_alloc = {&buf_alloc_vtable};
+static struct alloc
+ba_alloc = {&buf_alloc_vtable};
 
-void buf_alloc_init(struct buf_alloc *ba, char *buf, size_t cap)
+void
+buf_alloc_init(struct buf_alloc *ba, char *buf, size_t cap)
 {
 	ba->ba_alloc = ba_alloc;
 	ba->ba_last = buf;
