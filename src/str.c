@@ -1,123 +1,190 @@
-#include <stdarg.h>
 #include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include "abort.h"
 #include "alloc.h"
-#include "strbuf.h"
-#include "printf.h"
-#include "memory.h"
 #include "checked.h"
+#include "str.h"
 
-#define STRBUF_MIN_CAP 16
+#define STRING_MIN_CAP 16
 
-void
-strbuf_init(struct strbuf *sb)
+static void
+destroy(struct string *str)
 {
-	sb->sb_len = 0;
-	sb->sb_cap = 0;
-	sb->sb_str = NULL;
-	sb->sb_alloc = &sys_alloc;
+	str->str_len = 0;
+	if (str->str_str != NULL) {
+		deallocate_with(str->str_alloc, str->str_str, str->str_cap);
+		str->str_str = NULL;
+	}
+	str->str_cap = 0;
+	str->str_alloc = NULL;
+	str->str_node.prev = NULL;
+	str->str_node.next = NULL;
+}
+
+static struct string *
+str_node_parent(struct str_node *node)
+{
+	while (node->prev != NULL) {
+		node = node->prev;
+	}
+	return (void *)node;
 }
 
 void
-strbuf_init_with(struct strbuf *sb, struct alloc *alloc, size_t cap)
+string_init(struct string *str)
 {
-	sb->sb_len = 0;
-	sb->sb_cap = cap;
+	str->str_len = 0;
+	str->str_cap = 0;
+	str->str_str = NULL;
+	str->str_alloc = &sys_alloc;
+	str->str_node.prev = NULL;
+	str->str_node.next = NULL;
+	str->str_finished = 0;
+}
+
+void
+string_init_with(struct string *str, struct alloc *alloc, size_t cap)
+{
+	str->str_len = 0;
+	str->str_cap = cap;
 	if (cap == 0) {
-		sb->sb_str = NULL;
+		str->str_str = NULL;
 	} else {
-		sb->sb_str = allocate_with(alloc, cap);
+		str->str_str = allocate_with(alloc, cap);
 	}
-	sb->sb_alloc = alloc;
+	str->str_alloc = alloc;
+	str->str_node.prev = NULL;
+	str->str_node.next = NULL;
+	str->str_finished = 0;
 }
 
 void
-strbuf_finish(struct strbuf *sb)
+string_finish(struct string *str)
 {
-	sb->sb_len = 0;
-	sb->sb_cap = 0;
-	if (sb->sb_str != NULL) {
-		deallocate_with(sb->sb_alloc, sb->sb_str, sb->sb_cap);
-		sb->sb_str = NULL;
+	str->str_finished = 1;
+	if (str->str_node.next == NULL) {
+		destroy(str);
 	}
-	sb->sb_alloc = NULL;
 }
 
 void
-strbuf_expand_by(struct strbuf *sb, size_t atleast)
+string_expand_to(struct string *str, size_t atleast)
 {
-	size_t newcap;
-	if (atleast < sb->sb_cap) {
-		newcap = add_sz(sb->sb_cap, sb->sb_cap);
-	} else {
-		newcap = add_sz(sb->sb_cap, atleast);
-	}
-	strbuf_expand_to(sb, newcap);
-}
-
-void
-strbuf_expand_to(struct strbuf *sb, size_t atleast)
-{
-	if (sb->sb_cap >= atleast) {
+	if (atleast < str->str_cap) {
 		return;
 	}
 
-	if (atleast < STRBUF_MIN_CAP) {
-		atleast = STRBUF_MIN_CAP;
+	if (atleast < STRING_MIN_CAP) {
+		atleast = STRING_MIN_CAP;
 	}
 
-	if (sb->sb_str == NULL) {
-		sb->sb_str = allocate_with(sb->sb_alloc, atleast);
+	if (str->str_node.next != NULL) {
+		abort_with_error("Cannot expand string when there are active views\n");
+	}
+
+	if (str->str_str == NULL) {
+		str->str_str = allocate_with(str->str_alloc, atleast);
 	} else {
-		sb->sb_str = reallocate_with(sb->sb_alloc, sb->sb_str, sb->sb_cap, atleast);
+		str->str_str = reallocate_with(
+			str->str_alloc,
+			str->str_str,
+			str->str_cap,
+			atleast);
 	}
-	sb->sb_cap = atleast;
+	str->str_cap = atleast;
 }
 
 void
-strbuf_append_char(struct strbuf *sb, char ch)
+string_expand_by(struct string *str, size_t atleast)
 {
-	if (sb->sb_len == sb->sb_cap) {
-		strbuf_expand_by(sb, 1);
+	size_t newcap;
+	if (atleast < str->str_cap) {
+		newcap = add_sz(str->str_cap, str->str_cap);
+	} else {
+		newcap = add_sz(str->str_cap, atleast);
 	}
-
-	sb->sb_str[sb->sb_len] = ch;
-	sb->sb_len += 1;
+	string_expand_to(str, newcap);
 }
 
 void
-strbuf_append_cstring(struct strbuf *sb, const char *cstr)
+string_append_char(struct string *str, char ch)
+{
+	if (str->str_len == str->str_cap) {
+		string_expand_by(str, 1);
+	}
+
+	str->str_str[str->str_len] = ch;
+	str->str_len += 1;
+}
+
+void
+string_append_cstring(struct string *str, const char *cstr)
 {
 	size_t len = strlen(cstr);
 
-	if (sb->sb_len + len >= sb->sb_cap) {
-		strbuf_expand_by(sb, len);
-		/*strbuf_expand_to(sb, sb->sb_len + len);*/
+	if (str->str_len + len >= str->str_cap) {
+		string_expand_by(str, len);
 	}
 
-	strncpy(sb->sb_str + sb->sb_len, cstr, len);
-	sb->sb_len += len;
+	strncpy(str->str_str + str->str_len, cstr, len);
+	str->str_len += len;
 }
 
 void
-strbuf_shrink_to_fit(struct strbuf *sb)
+string_shrink_to_fit(struct string *str)
 {
-	if (sb->sb_len == sb->sb_cap) {
+	if (str->str_len == str->str_cap) {
 		return;
 	}
 
-	sb->sb_str = reallocate_with(sb->sb_alloc, sb->sb_str, sb->sb_cap, sb->sb_len);
-	sb->sb_cap = sb->sb_len;
+	str->str_str = reallocate_with(
+		str->str_alloc,
+		str->str_str,
+		str->str_cap,
+		str->str_len);
+	str->str_cap = str->str_len;
 }
 
-const char *
-strbuf_as_cstring(struct strbuf *sb)
+struct strview *
+string_as_view(struct string *str)
 {
-	if (sb->sb_str == NULL || sb->sb_str[sb->sb_len - 1] != '\0') {
-		strbuf_append_char(sb, '\0');
+	struct str_node sv_node;
+	struct strview *sv = allocate_with(str->str_alloc, sizeof *sv);
+
+	sv_node.prev = &str->str_node;
+	sv_node.next = str->str_node.next;
+
+	sv->sv_len = str->str_len;
+	sv->sv_str = str->str_str;
+	sv->sv_node = sv_node;
+
+	if (str->str_node.next != NULL) {
+		str->str_node.next->prev = &sv->sv_node;
 	}
-	return sb->sb_str;
+	str->str_node.next = &sv->sv_node;
+
+	return sv;
+}
+
+void strview_destroy(struct strview *sv)
+{
+	struct string *str = str_node_parent(&sv->sv_node);
+	struct alloc *alloc = str->str_alloc;
+
+	sv->sv_len = 0;
+	sv->sv_str = NULL;
+
+	if (sv->sv_node.next == NULL && sv->sv_node.prev->prev == NULL) {
+		if (str->str_finished) {
+			destroy(str);
+		} else {
+			str->str_node.next = NULL;
+		}
+	} else {
+		sv->sv_node.prev->next = sv->sv_node.next;
+		if (sv->sv_node.next != NULL) {
+			sv->sv_node.next->prev = sv->sv_node.prev;
+		}
+	}
+	deallocate_with(alloc, sv, sizeof *sv);
 }

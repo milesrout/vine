@@ -12,7 +12,6 @@ DEPS      := $(OBJS:%.o=%.d)
 
 INCS      := $(addprefix -I,$(shell find ./include -type d))
 
-#CFLAGS    += -Qunused-arguments -Wno-unknown-warning-option
 CFLAGS    += -D_POSIX_C_SOURCE $(INCS) -MMD -MP -pedantic -pedantic-errors
 CFLAGS    += -std=c89 -ftrapv -fstack-protector -Werror -Wfatal-errors
 CFLAGS    += -fmax-errors=1 -Wall -Wextra -Wdouble-promotion -Wformat=2
@@ -30,7 +29,7 @@ CFLAGS    += -Wsign-conversion -Wpacked -Wdangling-else -Wparentheses
 CFLAGS    += -Wdate-time -Wjump-misses-init -Waggregate-return
 CFLAGS    += -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes
 CFLAGS    += -Wmissing-declarations -Wnormalized=nfkc -Wredundant-decls
-CFLAGS    += -Wnested-externs
+CFLAGS    += -Wnested-externs -Wno-overlength-strings
 LDLIBS    += -lm
 
 build/$(TARGET): $(OBJS)
