@@ -1,3 +1,7 @@
+#ifdef VINE_ALLOC_H_INCLUDED
+#error "May not include alloc.h more than once"
+#endif
+#define VINE_ALLOC_H_INCLUDED
 struct alloc;
 struct alloc_vtable {
 	void *(*allocate)(struct alloc *, size_t);

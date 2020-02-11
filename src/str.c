@@ -4,14 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include "abort.h"
-#include "str.h"
+#include "alloc.h"
+#include "strbuf.h"
 #include "printf.h"
 #include "memory.h"
-#include "alloc.h"
 #include "checked.h"
 
 #define STRBUF_MIN_CAP 16
-#define STRING_MIN_CAP 16
 
 void
 strbuf_init(struct strbuf *sb)
@@ -50,12 +49,13 @@ strbuf_finish(struct strbuf *sb)
 void
 strbuf_expand_by(struct strbuf *sb, size_t atleast)
 {
-	if (atleast < sb->sb_cap / 2) {
-		strbuf_expand(sb);
+	size_t newcap;
+	if (atleast < sb->sb_cap) {
+		newcap = add_sz(sb->sb_cap, sb->sb_cap);
 	} else {
-		size_t newcap = add_sz(sb->sb_cap, atleast);
-		strbuf_expand_to(sb, newcap);
+		newcap = add_sz(sb->sb_cap, atleast);
 	}
+	strbuf_expand_to(sb, newcap);
 }
 
 void
@@ -75,13 +75,6 @@ strbuf_expand_to(struct strbuf *sb, size_t atleast)
 		sb->sb_str = reallocate_with(sb->sb_alloc, sb->sb_str, sb->sb_cap, atleast);
 	}
 	sb->sb_cap = atleast;
-}
-
-void
-strbuf_expand(struct strbuf *sb)
-{
-	size_t newcap = add_sz(sb->sb_cap, sb->sb_cap / 2);
-	strbuf_expand_to(sb, newcap);
 }
 
 void
@@ -127,25 +120,4 @@ strbuf_as_cstring(struct strbuf *sb)
 		strbuf_append_char(sb, '\0');
 	}
 	return sb->sb_str;
-}
-
-struct string *
-string_create(size_t cap)
-{
-	struct string *s;
-	
-	if (cap < STRING_MIN_CAP) {
-		cap = STRING_MIN_CAP;
-	}
-
-	s = allocate(sizeof(struct string) + cap - 1);
-	s->str_cap = cap;
-
-	return s;
-}
-
-void
-string_destroy(struct string *str)
-{
-	deallocate(str, sizeof(struct string) + str->str_cap - 1);
 }

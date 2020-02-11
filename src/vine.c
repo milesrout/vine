@@ -5,10 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "printf.h"
-#include "str.h"
 #include "memory.h"
 #include "alloc.h"
 #include "alloc_buf.h"
+#include "str.h"
 #include "hash.h"
 
 int

@@ -1,3 +1,7 @@
+#ifdef VINE_MEMORY_H_INCLUDED
+#error "May not include memory.h more than once"
+#endif
+#define VINE_MEMORY_H_INCLUDED
 #include "_memory.h"
 #pragma GCC poison malloc
 #pragma GCC poison calloc
