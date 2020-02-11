@@ -32,44 +32,47 @@ normally used in combination with the GNU operating system: the whole system \
 is basically GNU with Linux added, or GNU/Linux.  All the so-called \"Linux\" \
 distributions are really distributions of GNU/Linux.";
 
+static void
+test_hash_string(const char *str, size_t len)
+{
+	uint32_t hash = fnv1a((const uint8_t *)str, len);
+	size_t actual = len;
+	const char *fmt;
+	if (len <= 64) {
+		fmt = "\"%.*s\" (len %llu) hashes to %llx\n";
+	} else {
+		fmt = "\"%.*s...\" (len %llu) hashes to %llx\n";
+		len = 61;
+	}
+	efprintf(stderr, fmt, len, str, actual, hash);
+}
+
 int
 main(void)
 {
 	{
 		struct string str;
 		struct strview *sv, *sv_all;
-		uint32_t hash1, hash2, hash3;
 		string_init(&str);
-		string_expand_to(&str, 4096);
-		efprintf(stderr, "%p has length %llu, capacity %llu\n",
-			         &str, str.str_len, str.str_cap);
 		string_append_cstring(&str, autism);
-		efprintf(stderr, "%p has length %llu, capacity %llu\n",
-			         &str, str.str_len, str.str_cap);
+		string_expand_to(&str, 4096);
 		sv = string_as_view(&str);
 		string_append_cstring(&str, autism);
-		efprintf(stderr, "%p has length %llu, capacity %llu\n",
-			         &str, str.str_len, str.str_cap);
 		string_append_cstring(&str, autism);
-		efprintf(stderr, "%p has length %llu, capacity %llu\n",
-			         &str, str.str_len, str.str_cap);
 		sv_all = string_as_view(&str);
 
-		hash1 = fnv1a((const uint8_t *)str.str_str, str.str_len);
-		efprintf(stderr, "\"%.*s\" hashes to %llx\n", str.str_len, str.str_str, hash1);
-
-		hash2 = fnv1a((const uint8_t *)sv->sv_str, sv->sv_len);
-		efprintf(stderr, "\"%.*s\" hashes to %llx\n", sv->sv_len, sv->sv_str, hash2);
-
-		hash3 = fnv1a((const uint8_t *)sv_all->sv_str, sv_all->sv_len);
-		efprintf(stderr, "\"%.*s\" hashes to %llx\n", sv_all->sv_len, sv_all->sv_str, hash3);
+		test_hash_string(str.str_str, str.str_len);
 		string_finish(&str);
+
+		test_hash_string(sv->sv_str, sv->sv_len);
+		test_hash_string(sv_all->sv_str, sv_all->sv_len);
+		strview_destroy(sv);
+		strview_destroy(sv_all);
 	}
 
 	{
-		const char *data = "I'd like to interject for a moment";
-		uint32_t hash = fnv1a((const uint8_t *)data, strlen(data) + 0);
-		efprintf(stderr, "\"%s\" hashes to %llx\n", data, hash);
+		const char *data = "I'd just like to interject for a moment";
+		test_hash_string(data, strlen(data));
 	}
 
 	return 0;
