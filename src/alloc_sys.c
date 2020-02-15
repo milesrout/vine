@@ -4,11 +4,20 @@
 
 #include "alloc.h"
 
+#include <stdarg.h>
+#include <stdio.h>
+#include "printf.h"
+
+#include "log.h"
+
 static void *
 sys_allocate(struct alloc *a, size_t m)
 {
+	void *p;
 	(void)a;
-	return calloc(m, 1);
+	p = calloc(m, 1);
+	log_debug("alloc_sys", "Allocating 0x%llx bytes at %p\n", m, p);
+	return p;
 }
 
 static void *
@@ -29,6 +38,7 @@ sys_deallocate(struct alloc *a, void *p, size_t n)
 	 * that require us to pass the size of the allocated chunk of memory to the
 	 * free function.
 	 */
+	log_debug("alloc_sys", "Deallocating 0x%llx bytes at %p\n", n, p);
 	(void)a;
 	(void)n;
 	free(p);

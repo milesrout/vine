@@ -5,11 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include "printf.h"
+#include "log.h"
 #include "memory.h"
 #include "alloc.h"
 #include "alloc_buf.h"
 #include "str.h"
 #include "hash.h"
+#include "fibre.h"
 
 static const char *
 autism = "I'd just like to interject for a moment.  What you're referring to as Linux, \
@@ -44,12 +46,30 @@ test_hash_string(const char *str, size_t len)
 		fmt = "\"%.*s...\" (len %llu) hashes to %llx\n";
 		len = 61;
 	}
-	efprintf(stderr, fmt, len, str, actual, hash);
+	eprintf(fmt, len, str, actual, hash);
+}
+
+static int
+counter;
+
+static void
+test_fibre(void)
+{
+	eprintf("Hello, %d! (on fibre %d)\n", counter++, fibre_current_fibre_id());
+	if (counter < 10) {
+		fibre_go(test_fibre);
+	}
+	fibre_yield();
+	eprintf("Hello, %d! (on fibre %d)\n", --counter, fibre_current_fibre_id());
 }
 
 int
 main(void)
 {
+	counter = 0;
+
+	log_set_loglevel(LOG_INFO);
+
 	{
 		struct string str;
 		struct strview *sv, *sv_all;
@@ -73,6 +93,13 @@ main(void)
 	{
 		const char *data = "I'd just like to interject for a moment";
 		test_hash_string(data, strlen(data));
+	}
+
+	{
+		fibre_init();
+		fibre_go(test_fibre);
+		fibre_return(0);
+		fibre_finish();
 	}
 
 	return 0;

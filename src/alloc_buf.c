@@ -4,6 +4,7 @@
 #include "_memory.h"
 #include <stdio.h>
 #include "printf.h"
+#include "log.h"
 
 #include "alloc.h"
 #include "alloc_buf.h"
@@ -19,6 +20,8 @@ buf_allocate(struct alloc *alloc, size_t m)
 	ba->ba_last = ba->ba_cur;
 	ba->ba_cap -= m;
 	ba->ba_cur += m;
+
+	log_info("buf_alloc", "Allocating %llu bytes at %p\n", m, ba->ba_last);
 
 	return ba->ba_last;
 }

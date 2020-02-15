@@ -1,7 +1,3 @@
-#ifdef VINE_TASK_H_INCLUDED
-#error "May not include task.h more than once"
-#endif
-#define VINE_TASK_H_INCLUDED
 /* Processes in vine are called 'tasks'. Tasks are independent threads of
  * execution.
  *
@@ -41,4 +37,3 @@
  * (More explanation of cancel scopes and timeouts...)
  *
  */
-struct task;

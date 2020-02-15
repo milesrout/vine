@@ -6,7 +6,7 @@ endif
 
 TARGET    := vine
 
-SRCS      := $(shell find src -name *.c)
+SRCS      := $(shell find src -name *.c -or -name *.S)
 OBJS      := $(SRCS:%=build/%.o)
 DEPS      := $(OBJS:%.o=%.d)
 
@@ -39,6 +39,10 @@ build/%.c.o: %.c
 	mkdir -p $(dir $@)
 	$(CC) -c $(CFLAGS) $< -o $@
 	@$(RM) *.d
+
+build/%.S.o: %.S
+	mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) $< -o $@
 
 tags:
 	gcc -M $(INCS) $(SRCS) | sed -e 's/[\ ]/\n/g' | \
