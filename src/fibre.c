@@ -1,17 +1,25 @@
-#include "fibre.h"
-
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
+
+#include "alloc.h"
+#include "fibre.h"
 #include "printf.h"
+#include "abort.h"
 #include "log.h"
 #include "memory.h"
 
-#define MAX_FIBRES 16
-#define STACK_SIZE (2048 * 1024)
-
+/*
+ * This structure represents an execution context, namely it contains the
+ * values for all callee-saved registers. Because we switch fibres using a
+ * function call, the compiler takes care of saving everything else.
+ *
+ * This struct will need to be extended with additional items over time. For
+ * example, if/when fibre-local storage is implemented, there will need to be
+ * an FLS pointer stored in this structure.
+ */
 struct fibre_ctx {
 	uint64_t rsp;
 	uint64_t r15;
@@ -21,62 +29,202 @@ struct fibre_ctx {
 	uint64_t rbx;
 	uint64_t rbp;
 };
+/* 
+ * A function defined in fibre.S that actually performs the context switch.
+ */
+extern void fibre_switch(struct fibre_ctx *old, struct fibre_ctx *new);
+
 enum fibre_state {
-	TS_UNUSED,
-	TS_RUNNING,
-	TS_READY
+	/* a fibre that represents a possibly-uninitialised execution context */
+	FS_EMPTY,  
+	/* the fibre that represents the current execution context */
+	FS_ACTIVE,
+	/* a fibre that represents a valid, suspended execution context */
+	FS_READY
 };
 struct fibre {
-	struct fibre_ctx t_ctx;
-	int             t_state;
-	char           *t_stack;
+	struct fibre_ctx ctx;
+	int state;
+	char *stack;
 };
 
-static struct fibre
-fibre_table[MAX_FIBRES];
+/* 
+ * This value is calculated so that each fibre_list_node should be page-sized.
+ * The allocation for a fibre_list_node includes the array of struct fibres, so:
+ *     sizeof(fibre_list_node)
+ *         = 2 * sizeof(void *) + FIBRES_PER_NODE * sizeof(struct fibre)
+ * 
+ * Currently, sizeof(struct fibre) is 72 bytes, so this value should be 56. The
+ * array takes up 4032 bytes, leaving 64 bytes for the two pointers.
+ */
+#define FIBRES_PER_NODE 56
 
-static struct fibre *
-current_fibre;
+struct fibre_list_node {
+	struct fibre *fibres;
+	struct fibre_list_node *next;
+};
+struct fibre_list {
+	size_t stack_size;
+	struct alloc *alloc;
+	struct fibre_list_node *list;
+};
+
+static
+const size_t
+FIBRE_LIST_NODE_BLOCK = sizeof(struct fibre_list_node) + sizeof(struct fibre) * FIBRES_PER_NODE;
+
+/*
+ * This function is used in the initialisation of fibre_list so it should only
+ * use the alloc and stack_size members.
+ */
+static
+struct fibre_list_node *
+fibre_list_node_create(struct fibre_list *list)
+{
+	size_t i;
+	struct fibre_list_node *node;
+
+	void *p = allocate_with(list->alloc, FIBRE_LIST_NODE_BLOCK);
+
+	node = (struct fibre_list_node *)p;
+	node->fibres = (void *)((char *)p + sizeof(struct fibre_list_node));
+
+	for (i = 0; i < FIBRES_PER_NODE; i++) {
+		node->fibres[i].state = FS_EMPTY;
+		node->fibres[i].stack = NULL;
+	}
+
+	node->next = NULL;
+
+	return node;
+}
+
+static struct fibre *current_fibre;
+static struct fibre *main_fibre;
+static struct fibre_list global_fibre_list;
+
+/*
+static
+struct fibre *
+fibre_list_get(size_t i)
+{
+	struct fibre_list_node *node = global_fibre_list.list;
+
+	while (node != NULL) {
+		if (i < FIBRES_PER_NODE) {
+			return node->fibres + i;
+		}
+		i -= FIBRES_PER_NODE;
+		node = node->next;
+	}
+
+	return NULL;
+}
+*/
+
+static
+struct fibre *
+fibre_list_get_first_empty(void)
+{
+	struct fibre_list_node *node = global_fibre_list.list;
+	size_t i;
+
+	/* This loop is structured the way it is so that we can do something to
+	 * the last node after the loop finished (unless we early return).
+	 */
+	while (1) {
+		for (i = 0; i < FIBRES_PER_NODE; i++) {
+			if (node->fibres[i].state == FS_EMPTY) {
+				return node->fibres + i;
+			}
+		}
+		if (node->next == NULL) {
+			goto break_both;
+		}
+		node = node->next;
+	}
+break_both:
+
+	/* We didn't find one, so we need to allocate a new node. */
+	node->next = fibre_list_node_create(&global_fibre_list);
+
+	return &node->next->fibres[0];
+}
 
 void
-fibre_init(void)
+fibre_init(struct alloc *alloc, size_t stack_size)
 {
-	log_info("fibre", "Initialising fibre system\n");
-	current_fibre = &fibre_table[0];
-	current_fibre->t_state = TS_RUNNING;
-	current_fibre->t_stack = NULL;
+	log_info("fibre", "Initialising fibre system with %llu-sized stacks\n",
+	                  stack_size);
+	if (FIBRE_LIST_NODE_BLOCK > 4096) {
+		log_warning("fibre", "fibre_list_node is too big: lower FIBRES_PER_NODE\n");
+	} else if (FIBRE_LIST_NODE_BLOCK + sizeof(struct fibre) <= 4096) {
+		log_notice("fibre", "fibre_list_node could be bigger: raise FIBRES_PER_NODE\n");
+	} else {
+		log_info("fibre", "fibre_list_node fits perfectly in a page\n");
+	}
+
+	global_fibre_list.stack_size = stack_size;
+	global_fibre_list.alloc = alloc;
+	global_fibre_list.list = fibre_list_node_create(&global_fibre_list);
+	current_fibre = main_fibre = global_fibre_list.list->fibres;
+	main_fibre->state = FS_ACTIVE;
+	main_fibre->stack = NULL;
+}
+
+static
+void
+fibre_list_node_destroy(struct fibre_list_node *node)
+{
+	if (node->next != NULL) {
+		fibre_list_node_destroy(node->next);
+	}
+	deallocate_with(global_fibre_list.alloc, node, FIBRE_LIST_NODE_BLOCK);
 }
 
 void
 fibre_finish(void)
 {
-	int i;
+	struct fibre_list_node *node = global_fibre_list.list;
+	size_t i;
 
 	log_info("fibre", "Deinitialising fibre system\n");
 
-	for (i = 0; i < MAX_FIBRES; i++) {
-		if (fibre_table[i].t_stack != NULL) {
-			deallocate(fibre_table[i].t_stack, STACK_SIZE);
+	while (node != NULL) {
+		for (i = 0; i < FIBRES_PER_NODE; i++) {
+			if (node->fibres[i].stack != NULL) {
+				deallocate_with(global_fibre_list.alloc,
+					node->fibres[i].stack,
+					global_fibre_list.stack_size);
+			}
 		}
+		node = node->next;
 	}
+
+	fibre_list_node_destroy(global_fibre_list.list);
 }
 
-static int
+static
+size_t
 current_fibre_id(void)
 {
-	int i;
-	struct fibre *fibre;
+	size_t i = 0, k;
+	struct fibre_list_node *node = global_fibre_list.list;
 
-	for (i = 0, fibre = &fibre_table[0];; i++, fibre++) {
-		if (fibre == current_fibre) {
-			break;
+	while (node != NULL) {
+		for (k = 0; k < FIBRES_PER_NODE; k++, i++) {
+			if (&node->fibres[k] == current_fibre) {
+				goto break_both;
+			}
 		}
+		node = node->next;
 	}
+break_both:
 
 	return i;
 }
 
-int
+size_t
 fibre_current_fibre_id(void)
 {
 	return current_fibre_id();
@@ -85,11 +233,11 @@ fibre_current_fibre_id(void)
 void
 fibre_return(int ret)
 {
-	log_debug("fibre", "Returning from fibre %d with value %d\n",
-	                  current_fibre_id(), ret);
+	log_debug("fibre", "Returning from fibre %llu with value %d\n",
+	                   current_fibre_id(), ret);
 
-	if (current_fibre != &fibre_table[0]) {
-		current_fibre->t_state = TS_UNUSED;
+	if (current_fibre != main_fibre) {
+		current_fibre->state = FS_EMPTY;
 		fibre_yield();
 		/* unreachable */
 	}
@@ -99,32 +247,97 @@ fibre_return(int ret)
 	exit(ret);
 }
 
+static
+struct fibre *
+fibre_list_get_next_ready(size_t i)
+{
+	struct fibre_list_node *node = global_fibre_list.list;
+	size_t k = i;
+
+	log_debug("fibre", "i=%llu\n", i);
+
+	/* Loop through until we get to the current fibre */
+	while (node != NULL) {
+		/* Once we get to it */
+		if (k < FIBRES_PER_NODE) {
+
+			/* Find a ready fibre after it if one exists */
+			for (k++; k < FIBRES_PER_NODE; k++) {
+				if (node->fibres[k].state == FS_READY) {
+					return &node->fibres[k];
+				}
+			}
+
+			/* Or loop through the remaining nodes to find one */
+			node = node->next;
+			while (node != NULL) {
+				for (k = 0; k < FIBRES_PER_NODE; k++) {
+					if (node->fibres[k].state == FS_READY) {
+						return &node->fibres[k];
+					}
+				}
+				node = node->next;
+			}
+
+			/* Start over from the beginning and go through to current */
+			break;
+		}
+		k -= FIBRES_PER_NODE;
+		node = node->next;
+	}
+
+	node = global_fibre_list.list;
+
+	/* Loop through until we get to the current fibre */
+	while (node != NULL) {
+		/* Once we get to it */
+		if (k < FIBRES_PER_NODE) {
+			/* Find a ready fibre before it */
+			for (k = 0; k < i; k++) {
+				if (node->fibres[k].state == FS_READY) {
+					return &node->fibres[k];
+				}
+			}
+
+			/* Okay, there isn't one. So there are no ready fibres
+			 * at all. We just return NULL to indicate we're done.
+			 */
+			return NULL;
+		}
+
+		/* Otherwise, just loop through all the fibres in this node */
+		for (k = 0; k < FIBRES_PER_NODE; k++) {
+			if (node->fibres[k].state == FS_READY) {
+				return &node->fibres[k];
+			}
+		}
+		i -= FIBRES_PER_NODE;
+		node = node->next;
+	}
+
+	return NULL;
+}
+
 int
 fibre_yield(void)
 {
-	struct fibre *fibre;
 	struct fibre_ctx *old, *new;
-	int old_id = current_fibre_id();
+	size_t old_id = current_fibre_id();
+	struct fibre *fibre = fibre_list_get_next_ready(old_id);
 
-	fibre = current_fibre;
-	while (fibre->t_state != TS_READY) {
-		if (++fibre == &fibre_table[MAX_FIBRES]) {
-			fibre = &fibre_table[0];
-		}
-		if (fibre == current_fibre) {
-			log_debug("fibre", "Yielding from fibre %d, finishing\n", old_id);
-			return 0;
-		}
+	if (fibre == NULL) {
+		log_debug("fibre", "Yielding from fibre %llu, finishing\n", old_id);
+		return 0;
 	}
 
-	if (current_fibre->t_state != TS_UNUSED) {
-		current_fibre->t_state = TS_READY;
+	if (current_fibre->state != FS_EMPTY) {
+		current_fibre->state = FS_READY;
 	}
-	fibre->t_state = TS_RUNNING;
-	old = &current_fibre->t_ctx;
-	new = &fibre->t_ctx;
+	fibre->state = FS_ACTIVE;
+	old = &current_fibre->ctx;
+	new = &fibre->ctx;
 	current_fibre = fibre;
-	log_debug("fibre", "Yielding from fibre %d, to fibre %d.\n", old_id, current_fibre_id());
+	log_debug("fibre", "Yielding from fibre %llu to fibre %llu.\n", old_id, current_fibre_id());
 	fibre_switch(old, new);
 	return 1;
 }
@@ -137,33 +350,28 @@ fibre_stop(void)
 	fibre_return(0);
 }
 
-int
+void
+/* fibre_go(void (*f)(void *), void *data) */
 fibre_go(void (*f)(void))
 {
 	char *stack;
-	struct fibre *fibre;
-	int i;
+	size_t size = global_fibre_list.stack_size;
+	struct fibre *fibre = fibre_list_get_first_empty();
 
-	for (i = 0, fibre = &fibre_table[0];; i++, fibre++) {
-		if (fibre == &fibre_table[MAX_FIBRES]) {
-			log_warning("fibre", "Could not find an empty fibre slot.\n");
-			return -1;
-		} else if (fibre->t_state == TS_UNUSED) {
-			log_debug("fibre", "Found an empty fibre slot, at %d.\n", i);
-			break;
-		}
+	if (fibre->stack == NULL) {
+		stack = allocate_with(global_fibre_list.alloc, size);
+	} else {
+		stack = fibre->stack;
 	}
 
-	stack = try_allocate(STACK_SIZE);
-	if (!stack) {
-		return -1;
-	}
-
-	*(uint64_t *)&stack[STACK_SIZE -  8] = (uint64_t)fibre_stop;
-	*(uint64_t *)&stack[STACK_SIZE - 16] = (uint64_t)f;
-	fibre->t_ctx.rsp = (uint64_t)&stack[STACK_SIZE - 16];
-	fibre->t_state = TS_READY;
-	fibre->t_stack = stack;
-
-	return 0;
+	*(uint64_t *)&stack[size -  8] = (uint64_t)fibre_stop;
+	*(uint64_t *)&stack[size - 16] = (uint64_t)f;
+	fibre->ctx.rsp = (uint64_t)&stack[size - 16];
+	/* Obviously this doesn't actually work! OBVIOUSLY! We need to use an
+	 * assembly function to put this pointer into rsi before the first call
+	 * to this fibre.
+	 *     fibre->ctx.rsi = (uint64_t)data;
+	 */
+	fibre->state = FS_READY;
+	fibre->stack = stack;
 }

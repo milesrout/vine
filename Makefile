@@ -12,7 +12,7 @@ DEPS      := $(OBJS:%.o=%.d)
 
 INCS      := $(addprefix -I,$(shell find ./include -type d))
 
-CFLAGS    += -D_POSIX_C_SOURCE $(INCS) -MMD -MP -pedantic -pedantic-errors
+CFLAGS    += -D_GNU_SOURCE $(INCS) -MMD -MP -pedantic -pedantic-errors
 CFLAGS    += -std=c89 -ftrapv -fstack-protector -Werror -Wfatal-errors
 CFLAGS    += -fmax-errors=1 -Wall -Wextra -Wdouble-promotion -Wformat=2
 CFLAGS    += -Wformat-signedness -Wvla -Wformat-truncation=2 -Wformat-overflow=2

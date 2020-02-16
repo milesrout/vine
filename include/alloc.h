@@ -12,6 +12,7 @@ struct alloc {
 	struct alloc_vtable *vtable;
 };
 extern struct alloc sys_alloc;
+extern struct alloc mmap_alloc;
 extern void *allocate_with(struct alloc *, size_t);
 extern void *reallocate_with(struct alloc *, void *, size_t, size_t);
 extern void *try_allocate_with(struct alloc *, size_t);

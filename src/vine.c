@@ -13,6 +13,9 @@
 #include "hash.h"
 #include "fibre.h"
 
+#define MAX_FIBRES 128
+#define STACK_SIZE (4 * 1024 * 1024)
+
 static const char *
 autism = "I'd just like to interject for a moment.  What you're referring to as Linux, \
 is in fact, GNU/Linux, or as I've recently taken to calling it, GNU plus Linux. \
@@ -55,12 +58,14 @@ counter;
 static void
 test_fibre(void)
 {
-	eprintf("Hello, %d! (on fibre %d)\n", counter++, fibre_current_fibre_id());
-	if (counter < 10) {
+	/* eprintf("Hello, %d! (on fibre %d)\n", counter++, fibre_current_fibre_id()); */
+	counter++;
+	if (counter < 1000) {
 		fibre_go(test_fibre);
 	}
 	fibre_yield();
-	eprintf("Hello, %d! (on fibre %d)\n", --counter, fibre_current_fibre_id());
+	--counter;
+	/* eprintf("Hello, %d! (on fibre %d)\n", --counter, fibre_current_fibre_id()); */
 }
 
 int
@@ -68,12 +73,13 @@ main(void)
 {
 	counter = 0;
 
-	log_set_loglevel(LOG_INFO);
+	log_set_loglevel(LOG_NOTICE);
+	/* log_set_system_loglevel("alloc_mmap", LOG_DEBUG); */
 
 	{
 		struct string str;
 		struct strview *sv, *sv_all;
-		string_init(&str);
+		string_init_with(&str, &sys_alloc, 16);
 		string_append_cstring(&str, autism);
 		string_expand_to(&str, 4096);
 		sv = string_as_view(&str);
@@ -93,13 +99,11 @@ main(void)
 	{
 		const char *data = "I'd just like to interject for a moment";
 		test_hash_string(data, strlen(data));
-	}
-
-	{
-		fibre_init();
+		fibre_init(&sys_alloc, STACK_SIZE);
 		fibre_go(test_fibre);
 		fibre_return(0);
-		fibre_finish();
+		/* test_hash_string(data, strlen(data) - 5); */
+		/* fibre_finish(); */
 	}
 
 	return 0;

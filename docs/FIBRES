@@ -1,0 +1,60 @@
+
+		Fibres
+
+Fibres, also known as 'green threads' are used to avoid expensive context
+switches.  The idea is that we want to allow many threads to execution to
+happen at once, but that we do not want those threads of execution to be mapped
+1:1 onto kernel threads.  Instead, we map M fibres onto N kernel threads
+where m >> n.
+
+Switching from one fibre to another is very cheap.  All we need to do is save
+the first fibre's execution context somewhere and then restore the second
+fibre's execution context.  Execution context of a fibre is the set of
+callee-saved registers[1] along with a few other pieces of thread-local state
+that should be per-fibre[2].
+
+
+		Interoperation with kernel threads:
+
+By default, fibres are not mapped in any particular way onto kernel threads.
+The N kernel threads that vine is running on are used in the most
+efficient available way to service the needs of M fibres.
+
+However, sometimes fibres need to know that they can stay on one or more
+particular operating system thread.  For example, they might need to retain
+access to some operating system thread-local storage for interoperability
+reasons.  If this situation arises, they can be 'pinned' to a particular
+thread.
+
+
+		Synchronisation:
+
+One idea for how fibres could synchronise is through an entirely asynchronous
+mechanism.  That is, there would be only way for two fibres to synchronise is
+for one process to send another process an (asynchronous) message.  That's the
+only way.  Just one, exactly one.  Go to Jail, do not pass Go(lang), do not
+collect $200.
+
+Another way that two fibres could synchronise is for one to yield directly to
+another.  Switching from one fibre directly to another (as opposed to yielding
+and letting a scheduler decide which fibre to run) is very efficient when you
+know that you have just set the world up for that fibre to now be ready to
+execute.
+
+
+		Cancellation:
+
+It's fucking annoying to be unable to press Ctrl-C to instantly cancel
+fibres that are slow, unresponsive or simply no longer necessary.  Most
+fibre systems are very bad at handling cancellation, in large parts
+thanks to the appalling semantics of Unix signals in a parallel world.
+Fibres are built from the ground up with an an understanding that dealing
+with cancellation is necessary.
+
+(More explanation of cancel scopes and timeouts...)
+
+
+[1]: Caller-saved registers are saved, where necessary, by the compiler, before
+it calls the fibre_switch function.
+
+[2]: None of these exist yet.
