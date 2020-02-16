@@ -1,3 +1,6 @@
+
+		Vine Implementation Order
+
 This document describes the order in which parts of vine are being implemented.
 
 vine's ultimate goals have some shared, common parts, hence being included as
@@ -10,8 +13,8 @@ implemented in C.
 The first step is to implement a runtime environment which will form the basis
 for the Vine VM and as a general programming library for the C code. This
 runtime environment will provide for safe light-weight tasks along with a
-general library with strings, pointers, allocators, date and time, string
-views, hashing, hash tables, queues, iterators, random number generation, safe
+general library with STRINGS, pointers, ALLOCATORS, date and time, STRING
+VIEWS, HASHING, hash tables, queues, iterators, random number generation, safe
 i/o, string conversions, error handling, localisation, etc.
 
 The second step is to write or integrate an interpreter for a simple
