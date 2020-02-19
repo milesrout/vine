@@ -55,17 +55,25 @@ test_hash_string(const char *str, size_t len)
 static int
 counter;
 
+#define DO_PRINT
+
 static void
 test_fibre(void)
 {
-	/* eprintf("Hello, %d! (on fibre %d)\n", counter++, fibre_current_fibre_id()); */
+#ifdef DO_PRINT
+	eprintf("Hello, %d! (on fibre %d)\n", counter++, fibre_current_fibre_id());
+#else
 	counter++;
-	if (counter < 1000) {
+#endif
+	if (counter < 3000) {
 		fibre_go(test_fibre);
 	}
 	fibre_yield();
+#ifdef DO_PRINT
+	eprintf("Hello, %d! (on fibre %d)\n", --counter, fibre_current_fibre_id());
+#else
 	--counter;
-	/* eprintf("Hello, %d! (on fibre %d)\n", --counter, fibre_current_fibre_id()); */
+#endif
 }
 
 int

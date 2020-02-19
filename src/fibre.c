@@ -58,6 +58,7 @@ struct fibre {
  * array takes up 4032 bytes, leaving 64 bytes for the two pointers.
  */
 #define FIBRES_PER_NODE 56
+#define FIBRE_LIST_NODE_BLOCK (sizeof(struct fibre_list_node) + sizeof(struct fibre) * FIBRES_PER_NODE)
 
 struct fibre_list_node {
 	struct fibre *fibres;
@@ -68,10 +69,6 @@ struct fibre_list {
 	struct alloc *alloc;
 	struct fibre_list_node *list;
 };
-
-static
-const size_t
-FIBRE_LIST_NODE_BLOCK = sizeof(struct fibre_list_node) + sizeof(struct fibre) * FIBRES_PER_NODE;
 
 /*
  * This function is used in the initialisation of fibre_list so it should only
@@ -102,25 +99,6 @@ fibre_list_node_create(struct fibre_list *list)
 static struct fibre *current_fibre;
 static struct fibre *main_fibre;
 static struct fibre_list global_fibre_list;
-
-/*
-static
-struct fibre *
-fibre_list_get(size_t i)
-{
-	struct fibre_list_node *node = global_fibre_list.list;
-
-	while (node != NULL) {
-		if (i < FIBRES_PER_NODE) {
-			return node->fibres + i;
-		}
-		i -= FIBRES_PER_NODE;
-		node = node->next;
-	}
-
-	return NULL;
-}
-*/
 
 static
 struct fibre *
