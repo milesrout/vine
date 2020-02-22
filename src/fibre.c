@@ -214,6 +214,19 @@ fibre_return(int ret)
 
 	if (current_fibre != main_fibre) {
 		current_fibre->state = FS_EMPTY;
+		/* TODO: When we finish with a fibre, we should mark its stack
+		 * as no longer needed. We could deallocate it, but constantly
+		 * allocating and deallocating stacks is likely to be wasteful.
+		 * However, reusing stacks has the potential for information
+		 * leakage. MADV_DONTNEED should zero-fill the pages if they're
+		 * ever reused, however. We need an allocator-dependent
+		 * equivalent of:
+		 *
+		 * madvise(current_fibre->stack, MADV_DONTNEED);
+		 *
+		 * Or we need to hardcode the use of the mmap allocator for
+		 * allocating stacks.
+		 */
 		fibre_yield();
 		/* unreachable */
 	}
@@ -229,8 +242,6 @@ fibre_queue_get_next_ready(size_t i)
 {
 	struct fibre_queue_node *node = global_fibre_queue.queue;
 	size_t k = i;
-
-	log_debug("fibre", "i=%llu\n", i);
 
 	/* Loop through until we get to the current fibre */
 	while (node != NULL) {
