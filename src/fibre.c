@@ -64,24 +64,21 @@ struct fibre_queue_node {
 	struct fibre *fibres;
 	struct fibre_queue_node *next;
 };
+
 struct fibre_queue {
 	size_t stack_size;
 	struct alloc *alloc;
-	struct fibre_queue_node *list;
+	struct fibre_queue_node *queue;
 };
 
-/*
- * This function is used in the initialisation of fibre_queue so it should only
- * use the alloc and stack_size members.
- */
 static
 struct fibre_queue_node *
-fibre_queue_node_create(struct fibre_queue *list)
+fibre_queue_node_create(struct alloc *alloc)
 {
 	size_t i;
 	struct fibre_queue_node *node;
 
-	void *p = allocate_with(list->alloc, FIBRE_QUEUE_NODE_BLOCK);
+	void *p = allocate_with(alloc, FIBRE_QUEUE_NODE_BLOCK);
 
 	node = (struct fibre_queue_node *)p;
 	node->fibres = (void *)((char *)p + sizeof(struct fibre_queue_node));
@@ -96,15 +93,21 @@ fibre_queue_node_create(struct fibre_queue *list)
 	return node;
 }
 
-static struct fibre *current_fibre;
-static struct fibre *main_fibre;
-static struct fibre_queue global_fibre_queue;
+static
+void
+fibre_queue_node_destroy(struct fibre_queue *queue, struct fibre_queue_node *node)
+{
+	if (node->next != NULL) {
+		fibre_queue_node_destroy(queue, node->next);
+	}
+	deallocate_with(queue->alloc, node, FIBRE_QUEUE_NODE_BLOCK);
+}
 
 static
 struct fibre *
-fibre_queue_get_first_empty(void)
+fibre_queue_get_first_empty(struct fibre_queue *queue)
 {
-	struct fibre_queue_node *node = global_fibre_queue.list;
+	struct fibre_queue_node *node = queue->queue;
 	size_t i;
 
 	/* This loop is structured the way it is so that we can do something to
@@ -124,10 +127,14 @@ fibre_queue_get_first_empty(void)
 break_both:
 
 	/* We didn't find one, so we need to allocate a new node. */
-	node->next = fibre_queue_node_create(&global_fibre_queue);
+	node->next = fibre_queue_node_create(queue->alloc);
 
 	return &node->next->fibres[0];
 }
+
+static struct fibre *current_fibre;
+static struct fibre *main_fibre;
+static struct fibre_queue global_fibre_queue;
 
 void
 fibre_init(struct alloc *alloc, size_t stack_size)
@@ -144,26 +151,17 @@ fibre_init(struct alloc *alloc, size_t stack_size)
 
 	global_fibre_queue.stack_size = stack_size;
 	global_fibre_queue.alloc = alloc;
-	global_fibre_queue.list = fibre_queue_node_create(&global_fibre_queue);
-	current_fibre = main_fibre = global_fibre_queue.list->fibres;
+	global_fibre_queue.queue = fibre_queue_node_create(alloc);
+	current_fibre = main_fibre = global_fibre_queue.queue->fibres;
 	main_fibre->state = FS_ACTIVE;
 	main_fibre->stack = NULL;
 }
 
-static
-void
-fibre_queue_node_destroy(struct fibre_queue_node *node)
-{
-	if (node->next != NULL) {
-		fibre_queue_node_destroy(node->next);
-	}
-	deallocate_with(global_fibre_queue.alloc, node, FIBRE_QUEUE_NODE_BLOCK);
-}
 
 void
 fibre_finish(void)
 {
-	struct fibre_queue_node *node = global_fibre_queue.list;
+	struct fibre_queue_node *node = global_fibre_queue.queue;
 	size_t i;
 
 	log_info("fibre", "Deinitialising fibre system\n");
@@ -179,7 +177,7 @@ fibre_finish(void)
 		node = node->next;
 	}
 
-	fibre_queue_node_destroy(global_fibre_queue.list);
+	fibre_queue_node_destroy(&global_fibre_queue, global_fibre_queue.queue);
 }
 
 static
@@ -187,7 +185,7 @@ size_t
 current_fibre_id(void)
 {
 	size_t i = 0, k;
-	struct fibre_queue_node *node = global_fibre_queue.list;
+	struct fibre_queue_node *node = global_fibre_queue.queue;
 
 	while (node != NULL) {
 		for (k = 0; k < FIBRES_PER_NODE; k++, i++) {
@@ -229,7 +227,7 @@ static
 struct fibre *
 fibre_queue_get_next_ready(size_t i)
 {
-	struct fibre_queue_node *node = global_fibre_queue.list;
+	struct fibre_queue_node *node = global_fibre_queue.queue;
 	size_t k = i;
 
 	log_debug("fibre", "i=%llu\n", i);
@@ -264,7 +262,7 @@ fibre_queue_get_next_ready(size_t i)
 		node = node->next;
 	}
 
-	node = global_fibre_queue.list;
+	node = global_fibre_queue.queue;
 
 	/* Loop through until we get to the current fibre */
 	while (node != NULL) {
@@ -334,7 +332,7 @@ fibre_go(void (*f)(void))
 {
 	char *stack;
 	size_t size = global_fibre_queue.stack_size;
-	struct fibre *fibre = fibre_queue_get_first_empty();
+	struct fibre *fibre = fibre_queue_get_first_empty(&global_fibre_queue);
 
 	if (fibre->stack == NULL) {
 		stack = allocate_with(global_fibre_queue.alloc, size);
