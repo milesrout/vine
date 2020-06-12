@@ -22,10 +22,10 @@ programming language on top of this runtime environment. Something like Scheme
 would be the most appropriate choice for this step, but another language could
 be chosen, like the original conception of Beetle (Python-with-proper-lambdas).
 
-The third step is probably to render a text-based interface using C. Many
-different components of vine require the ability to render a pane of simple
-monospaced text, most prominently text editing and terminal emulation. So the
-first step is to render text in a window. It all flows on from there. In the
-future it would be nice to write an efficient hardware-accelerated engine for
-doing text layout, font rendering, hinting, etc. Until then, we'll just use
-Cairo + Pango.
+The third step is probably to render a text-based interface using C, perhaps
+utilising notcurses. Many different components of vine require the ability to
+render a pane of simple monospaced text, most prominently text editing and
+terminal emulation. So the first step is to render text in a window. It all
+flows on from there. In the future it would be nice to write an efficient
+hardware-accelerated engine for doing text layout, font rendering, hinting,
+etc. Until then, we'll just use Cairo + Pango.
