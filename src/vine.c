@@ -55,25 +55,24 @@ test_hash_string(const char *str, size_t len)
 static int
 counter;
 
-#define DO_PRINT
+#define NDO_PRINT
 
 static void
 test_fibre(void)
 {
+	int i = ++counter;
 #ifdef DO_PRINT
-	eprintf("Hello, %d! (on fibre %d)\n", counter++, fibre_current_fibre_id());
-#else
-	counter++;
+	eprintf("Hello, %d!\n", i);
 #endif
-	if (counter < 3000) {
+	if (i < 300000) {
 		fibre_go(test_fibre);
+		fibre_yield();
 	}
 	fibre_yield();
 #ifdef DO_PRINT
-	eprintf("Hello, %d! (on fibre %d)\n", --counter, fibre_current_fibre_id());
-#else
-	--counter;
+	eprintf("Goodbye, %d!\n", i);
 #endif
+	fibre_return(0);
 }
 
 int
@@ -81,7 +80,7 @@ main(void)
 {
 	counter = 0;
 
-	log_set_loglevel(LOG_NOTICE);
+	log_set_loglevel(LOG_INFO);
 	/* log_set_system_loglevel("alloc_mmap", LOG_DEBUG); */
 
 	{
@@ -107,7 +106,7 @@ main(void)
 	{
 		const char *data = "I'd just like to interject for a moment";
 		test_hash_string(data, strlen(data));
-		fibre_init(&sys_alloc, STACK_SIZE);
+		fibre_init(&mmap_alloc, STACK_SIZE);
 		fibre_go(test_fibre);
 		fibre_return(0);
 		/* test_hash_string(data, strlen(data) - 5); */

@@ -11,4 +11,3 @@ extern void fibre_return(int);
 extern int fibre_yield(void);
 /* extern void fibre_go(void (*)(void *), void *); */
 extern void fibre_go(void (*)(void));
-extern size_t fibre_current_fibre_id(void);
