@@ -44,7 +44,7 @@ build/%.S.o: %.S
 	mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
-tags:
+tags: $(SRCS)
 	gcc -M $(INCS) $(SRCS) | sed -e 's/[\ ]/\n/g' | \
 		sed -e '/^$$/d' -e '/\.o:[ \t]*$$/d' | \
 		ctags -L - $(CTAGS_FLAGS)
