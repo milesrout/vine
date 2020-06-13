@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#include "util.h"
 #include "alloc.h"
 #include "fibre.h"
 #include "printf.h"
@@ -91,8 +92,6 @@ struct fibre_store_node {
 	struct fibre_store_node *prev, *next;
 	struct fibre fibre;
 };
-
-#define container_of(type, member, ptr) (type *)(void *)(((char *)(ptr)) - offsetof(type, member))
 
 /*
  * This is the control block for a linked list of struct fibres.
