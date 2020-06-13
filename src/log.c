@@ -3,8 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "abort.h"
-#include "_printf.h"
-#define VINE_PRINTF_H_INCLUDED
+#include "printf.h"
 #include "log.h"
 
 #define LEVEL_COLUMN_WIDTH 10
@@ -20,6 +19,13 @@ log_set_loglevel(int level)
 	global_loglevel = level;
 }
 
+void
+log_set_subsystem_loglevel(const char *subsystem, int level)
+{
+	(void)subsystem;
+	(void)level;
+}
+
 static
 const char *
 level_to_string(int level)
@@ -33,16 +39,12 @@ level_to_string(int level)
 		case LOG_NOTICE: return "NOTICE";
 		case LOG_INFO: return "INFO";
 		case LOG_DEBUG: return "DEBUG";
-		default: abort_with_error("invalid log level %d (expected in [0,7])\n");
+		default: abort_with_error("invalid log level %d (expected in [0,7])\n", level);
 	}
 
 	return NULL;
 }
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-#endif
 void
 vlogf(int level, const char *subsystem, const char *fmt, va_list args)
 {
@@ -51,13 +53,7 @@ vlogf(int level, const char *subsystem, const char *fmt, va_list args)
 		evfprintf(stderr, fmt, args);
 	}
 }
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
 
-#ifdef __GNUC__
-__attribute__((format(printf, 3, 4)))
-#endif
 void
 logf(int level, const char *subsystem, const char *fmt, ...)
 {
@@ -68,9 +64,6 @@ logf(int level, const char *subsystem, const char *fmt, ...)
 	va_end(args);
 }
 
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
-#endif
 void
 log_emerg(const char *subsystem, const char *fmt, ...)
 {
@@ -81,9 +74,6 @@ log_emerg(const char *subsystem, const char *fmt, ...)
 	va_end(args);
 }
 
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
-#endif
 void
 log_alert(const char *subsystem, const char *fmt, ...)
 {
@@ -94,9 +84,6 @@ log_alert(const char *subsystem, const char *fmt, ...)
 	va_end(args);
 }
 
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
-#endif
 void
 log_crit(const char *subsystem, const char *fmt, ...)
 {
@@ -107,9 +94,6 @@ log_crit(const char *subsystem, const char *fmt, ...)
 	va_end(args);
 }
 
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
-#endif
 void
 log_err(const char *subsystem, const char *fmt, ...)
 {
@@ -120,9 +104,6 @@ log_err(const char *subsystem, const char *fmt, ...)
 	va_end(args);
 }
 
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
-#endif
 void
 log_warning(const char *subsystem, const char *fmt, ...)
 {
@@ -133,9 +114,6 @@ log_warning(const char *subsystem, const char *fmt, ...)
 	va_end(args);
 }
 
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
-#endif
 void
 log_notice(const char *subsystem, const char *fmt, ...)
 {
@@ -146,9 +124,6 @@ log_notice(const char *subsystem, const char *fmt, ...)
 	va_end(args);
 }
 
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
-#endif
 void
 log_info(const char *subsystem, const char *fmt, ...)
 {
@@ -159,9 +134,6 @@ log_info(const char *subsystem, const char *fmt, ...)
 	va_end(args);
 }
 
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
-#endif
 void
 log_debug(const char *subsystem, const char *fmt, ...)
 {

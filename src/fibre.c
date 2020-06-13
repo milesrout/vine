@@ -289,15 +289,15 @@ fibre_init(struct alloc *alloc, size_t stack_size)
 	size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
 	size_t i;
 
-	log_info("fibre", "Initialising fibre system with %lluMiB-sized stacks\n",
+	log_info("fibre", "Initialising fibre system with %luMiB-sized stacks\n",
 	                  stack_size / 1024 / 1024);
 
 	if (sizeof(struct fibre_store_block) > page_size) {
-		log_warning("fibre", "fibre_store_block is too big to fit in a page: lower FIBRE_STORE_NODES_PER_BLOCK (%llu)\n", sizeof(struct fibre_store_block));
+		log_warning("fibre", "fibre_store_block is too big to fit in a page: lower FIBRE_STORE_NODES_PER_BLOCK (%lu)\n", sizeof(struct fibre_store_block));
 	} else if (sizeof(struct fibre_store_block) + sizeof(struct fibre_store_node) <= page_size) {
-		log_notice("fibre", "fibre_store_block could be bigger: raise FIBRE_STORE_NODES_PER_BLOCK (%llu)\n", sizeof(struct fibre_store_block));
+		log_notice("fibre", "fibre_store_block could be bigger: raise FIBRE_STORE_NODES_PER_BLOCK (%lu)\n", sizeof(struct fibre_store_block));
 	} else {
-		log_info("fibre", "fibre_store_block fits perfectly in a page (%llu)\n", sizeof(struct fibre_store_block));
+		log_info("fibre", "fibre_store_block fits perfectly in a page (%lu)\n", sizeof(struct fibre_store_block));
 	}
 
 	global_fibre_store.stack_size = stack_size;
@@ -318,8 +318,8 @@ fibre_finish(void)
 {
 	log_info("fibre", "Deinitialising fibre system\n");
 
-	log_info("fibre", "Fibre stat stack_allocs: %lld\n", fibre_stats.stack_allocs);
-	log_info("fibre", "Fibre stat fibre_go_calls: %lld\n", fibre_stats.fibre_go_calls);
+	log_info("fibre", "Fibre stat stack_allocs: %ld\n", fibre_stats.stack_allocs);
+	log_info("fibre", "Fibre stat fibre_go_calls: %ld\n", fibre_stats.fibre_go_calls);
 
 	/* TODO: need to somehow deallocate all the stacks */
 	/* TODO: need to somehow deallocate all the fibre_store_blocks */
@@ -329,7 +329,7 @@ void
 fibre_return(int ret)
 {
 	log_debug("fibre", "Returning from fibre %p with value %d\n",
-	                   current_fibre, ret);
+	                   (void *)current_fibre, ret);
 
 	if (current_fibre != main_fibre) {
 		current_fibre->state = FS_EMPTY;
@@ -372,7 +372,8 @@ fibre_yield(void)
 	struct fibre *fibre = fibre_store_get_next_ready(&global_fibre_store);
 
 	if (fibre == NULL) {
-		log_debug("fibre", "Yielding from fibre %p, finishing\n", current_fibre);
+		log_debug("fibre", "Yielding from fibre %p, finishing\n",
+		                   (void *)current_fibre);
 		return 0;
 	}
 
@@ -385,7 +386,9 @@ fibre_yield(void)
 	new = &fibre->ctx;
 	old_fibre = current_fibre;
 	current_fibre = fibre;
-	log_debug("fibre", "Yielding from fibre %p to fibre %p.\n", old_fibre, current_fibre);
+	log_debug("fibre", "Yielding from fibre %p to fibre %p.\n",
+	                   (void *)old_fibre,
+	                   (void *)current_fibre);
 	fibre_switch(old, new);
 	return 1;
 }

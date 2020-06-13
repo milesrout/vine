@@ -7,10 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-#endif
 void
 evfprintf(FILE *file, const char *fmt, va_list args)
 {
@@ -23,13 +19,7 @@ evfprintf(FILE *file, const char *fmt, va_list args)
 		abort_with_error("efprintf failed: %s\n", strerror(errno));
 	}
 }
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
 
-#ifdef __GNUC__
-__attribute__((format(printf, 2, 3)))
-#endif
 void
 efprintf(FILE *file, const char *fmt, ...)
 {
@@ -40,9 +30,6 @@ efprintf(FILE *file, const char *fmt, ...)
 	va_end(args);
 }
 
-#ifdef __GNUC__
-__attribute__((format(printf, 1, 2)))
-#endif
 void
 eprintf(const char *fmt, ...)
 {

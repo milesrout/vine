@@ -42,14 +42,11 @@ test_hash_string(const char *str, size_t len)
 {
 	uint32_t hash = fnv1a((const uint8_t *)str, len);
 	size_t actual = len;
-	const char *fmt;
 	if (len <= 64) {
-		fmt = "\"%.*s\" (len %llu) hashes to %llx\n";
+		eprintf("\"%.*s\" (len %lu) hashes to %x\n", (int)len, str, actual, hash);
 	} else {
-		fmt = "\"%.*s...\" (len %llu) hashes to %llx\n";
-		len = 61;
+		eprintf("\"%.*s...\" (len %lu) hashes to %x\n", 61, str, actual, hash);
 	}
-	eprintf(fmt, len, str, actual, hash);
 }
 
 static int

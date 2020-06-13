@@ -3,6 +3,7 @@
 #endif
 #define VINE_MEMORY_H_INCLUDED
 #include "_memory.h"
+#ifdef __GNUC__
 #pragma GCC poison malloc
 #pragma GCC poison calloc
 #pragma GCC poison realloc
@@ -10,3 +11,4 @@
 #pragma GCC poison ecalloc
 #pragma GCC poison erealloc
 #pragma GCC poison free
+#endif

@@ -21,7 +21,7 @@ buf_allocate(struct alloc *alloc, size_t m)
 	ba->ba_cap -= m;
 	ba->ba_cur += m;
 
-	log_info("buf_alloc", "Allocating %llu bytes at %p\n", m, ba->ba_last);
+	log_info("buf_alloc", "Allocating %lu bytes at %p\n", m, ba->ba_last);
 
 	return ba->ba_last;
 }

@@ -18,7 +18,7 @@ sys_allocate(struct alloc *a, size_t m)
 	(void)a;
 
 	p = calloc(m, 1);
-	log_debug("alloc_sys", "Allocating 0x%llx bytes at %p\n", m, p);
+	log_debug("alloc_sys", "Allocating 0x%lx bytes at %p\n", m, p);
 	return p;
 }
 
@@ -39,7 +39,7 @@ sys_reallocate(struct alloc *a, void *q, size_t m, size_t n)
 static void
 sys_deallocate(struct alloc *a, void *p, size_t n)
 {
-	log_debug("alloc_sys", "Deallocating 0x%llx bytes at %p\n", n, p);
+	log_debug("alloc_sys", "Deallocating 0x%lx bytes at %p\n", n, p);
 
 	(void)a;
 

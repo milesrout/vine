@@ -4,9 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef __GNUC__
-__attribute__((format(printf, 1, 2)))
-#endif
 void
 abort_with_error(const char *fmt, ...)
 {
