@@ -16,13 +16,14 @@ enum log_level {
 	LOG_DEBUG
 };
 extern void log_set_loglevel(int level);
-extern void vlogf(int level, const char *system, const char *fmt, va_list args);
-extern void logf(int level, const char *system, const char *fmt, ...);
-extern void log_emerg  (const char *system, const char *fmt, ...);
-extern void log_alert  (const char *system, const char *fmt, ...);
-extern void log_crit   (const char *system, const char *fmt, ...);
-extern void log_err    (const char *system, const char *fmt, ...);
-extern void log_warning(const char *system, const char *fmt, ...);
-extern void log_notice (const char *system, const char *fmt, ...);
-extern void log_info   (const char *system, const char *fmt, ...);
-extern void log_debug  (const char *system, const char *fmt, ...);
+extern void log_set_subsystem_loglevel(const char *subsystem, int level);
+extern void vlogf(int level, const char *subsystem, const char *fmt, va_list args);
+extern void logf(int level, const char *subsystem, const char *fmt, ...);
+extern void log_emerg  (const char *subsystem, const char *fmt, ...);
+extern void log_alert  (const char *subsystem, const char *fmt, ...);
+extern void log_crit   (const char *subsystem, const char *fmt, ...);
+extern void log_err    (const char *subsystem, const char *fmt, ...);
+extern void log_warning(const char *subsystem, const char *fmt, ...);
+extern void log_notice (const char *subsystem, const char *fmt, ...);
+extern void log_info   (const char *subsystem, const char *fmt, ...);
+extern void log_debug  (const char *subsystem, const char *fmt, ...);
