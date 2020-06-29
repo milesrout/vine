@@ -110,6 +110,7 @@ fibre_store_list_init(struct fibre_store_list *list)
 	list->start = list->end = NULL;
 }
 
+/* adds a fibre to the start of the list */
 static
 void
 fibre_store_list_enqueue(struct fibre_store_list *list, struct fibre *fibre)
@@ -136,6 +137,7 @@ fibre_store_list_enqueue(struct fibre_store_list *list, struct fibre *fibre)
 	}
 }
 
+/* removes a fibre from the end of the list */
 static
 struct fibre *
 fibre_store_list_dequeue(struct fibre_store_list *list)
@@ -184,6 +186,7 @@ fibre_store_list_dequeue(struct fibre_store_list *list)
  * never deallocated, but the struct fibres within them can be reused.
  */
 struct fibre_store_block {
+	struct fibre_store_block *next;
 	struct fibre_store_node nodes[FIBRE_STORE_NODES_PER_BLOCK];
 };
 
@@ -194,6 +197,7 @@ struct fibre_store_block {
 struct fibre_store {
 	size_t stack_size;
 	struct alloc *alloc;
+	struct fibre_store_block *blocks;
 	struct fibre_store_list lists[FP_NUM_PRIOS + 1];
 };
 
@@ -201,9 +205,9 @@ struct fibre_store {
 
 static
 struct fibre_store_block *
-fibre_store_block_create(struct alloc *alloc)
+fibre_store_block_create(struct fibre_store *store)
 {
-	struct fibre_store_block *block = allocate_with(alloc, sizeof *block);
+	struct fibre_store_block *block = allocate_with(store->alloc, sizeof *block);
 	size_t i;
 
 	/* set up the nodes in the block to form a bidirectional linked list */
@@ -212,6 +216,9 @@ fibre_store_block_create(struct alloc *alloc)
 		block->nodes[i].next = (i == MAX) ? NULL : &block->nodes[i + 1];
 		fibre_setup(&block->nodes[i].fibre);
 	}
+	
+	block->next = store->blocks;
+	store->blocks = block;
 
 	return block;
 }
@@ -219,7 +226,7 @@ fibre_store_block_create(struct alloc *alloc)
 #undef MAX
 
 /*
- * This takes fibres from the start of the list intead of the end, treating the
+ * This takes fibres from the start of the list instead of the end, treating the
  * empties list as a stack. The other lists are treated as queues.
  */
 static
@@ -235,7 +242,7 @@ fibre_store_get_first_empty(struct fibre_store *store)
 		assert1(empties_list->start == NULL);
 		assert1(empties_list->end == NULL);
 
-		block = fibre_store_block_create(store->alloc);
+		block = fibre_store_block_create(store);
 		empties_list->start = &block->nodes[0];
 		empties_list->end = &block->nodes[FIBRE_STORE_NODES_PER_BLOCK - 1];
 	}
@@ -302,6 +309,7 @@ fibre_init(struct alloc *alloc, size_t stack_size)
 
 	global_fibre_store.stack_size = stack_size;
 	global_fibre_store.alloc = alloc;
+	global_fibre_store.blocks = NULL;
 
 	for (i = 0; i <= FP_NUM_PRIOS; i++) {
 		fibre_store_list_init(&global_fibre_store.lists[i]);
@@ -313,6 +321,29 @@ fibre_init(struct alloc *alloc, size_t stack_size)
 	main_fibre->stack = NULL;
 }
 
+/* This should be further up, but the assertion requires it to be after the
+ * declaration of main_fibre */
+static
+void
+fibre_store_destroy(struct fibre_store *store)
+{
+	size_t i;
+	while (store->blocks != NULL) {
+		struct fibre_store_block *next = store->blocks->next;
+		for (i = 0; i < FIBRE_STORE_NODES_PER_BLOCK; i++) {
+			if (&store->blocks->nodes[i].fibre == main_fibre)
+				continue;
+			if (store->blocks->nodes[i].fibre.stack == NULL)
+				continue;
+			deallocate_with(store->alloc,
+				store->blocks->nodes[i].fibre.stack, store->stack_size);
+		}
+		deallocate_with(store->alloc, store->blocks, sizeof *store->blocks);
+		store->blocks = next;
+	}
+}
+
+
 void
 fibre_finish(void)
 {
@@ -321,8 +352,7 @@ fibre_finish(void)
 	log_info("fibre", "Fibre stat stack_allocs: %ld\n", fibre_stats.stack_allocs);
 	log_info("fibre", "Fibre stat fibre_go_calls: %ld\n", fibre_stats.fibre_go_calls);
 
-	/* TODO: need to somehow deallocate all the stacks */
-	/* TODO: need to somehow deallocate all the fibre_store_blocks */
+	fibre_store_destroy(&global_fibre_store);
 }
 
 void

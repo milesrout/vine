@@ -61,7 +61,7 @@ test_fibre(void)
 #ifdef DO_PRINT
 	eprintf("Hello, %d!\n", i);
 #endif
-	if (i < 300000) {
+	if (i < 30) {
 		fibre_go(test_fibre);
 		fibre_yield();
 	}
@@ -77,8 +77,8 @@ main(void)
 {
 	counter = 0;
 
-	log_set_loglevel(LOG_INFO);
-	/* log_set_system_loglevel("alloc_mmap", LOG_DEBUG); */
+	log_set_loglevel(LOG_DEBUG);
+	log_set_subsystem_loglevel("alloc_mmap", LOG_INFO);
 
 	{
 		struct string str;

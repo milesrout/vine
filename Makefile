@@ -1,7 +1,7 @@
 ifeq ($(BUILD),release)
 	CFLAGS += -O3 -s -DNDEBUG
 else
-	CFLAGS += -O0 -g
+	CFLAGS += -O0 -g -Werror 
 endif
 
 TARGET    := vine
@@ -11,25 +11,30 @@ OBJS      := $(SRCS:%=build/%.o)
 DEPS      := $(OBJS:%.o=%.d)
 
 INCS      := $(addprefix -I,$(shell find ./include -type d))
+INCS      := -I./include
 
-CFLAGS    += -D_GNU_SOURCE $(INCS) -MMD -MP -pedantic -pedantic-errors
-CFLAGS    += -std=c89 -ftrapv -fstack-protector -Werror -Wfatal-errors
-CFLAGS    += -fmax-errors=1 -Wall -Wextra -Wdouble-promotion -Wformat=2
-CFLAGS    += -Wformat-signedness -Wvla -Wformat-truncation=2 -Wformat-overflow=2
-CFLAGS    += -Wnull-dereference -Winit-self -Wuninitialized
-CFLAGS    += -Wimplicit-fallthrough=4 -Wstack-protector -Wmissing-include-dirs
-CFLAGS    += -Wshift-overflow=2 -Wswitch-default -Wswitch-enum
-CFLAGS    += -Wunused-parameter -Wunused-const-variable=2 -Wstrict-overflow=5
-CFLAGS    += -Wstringop-overflow=4 -Wstringop-truncation -Walloc-zero -Walloca
-CFLAGS    += -Warray-bounds -Wattribute-alias=2 -Wlogical-op
-CFLAGS    += -Wduplicated-branches -Wduplicated-cond -Wtrampolines -Wfloat-equal
-CFLAGS    += -Wshadow -Wunsafe-loop-optimizations -Wbad-function-cast
-CFLAGS    += -Wcast-qual -Wcast-align -Wwrite-strings -Wconversion
-CFLAGS    += -Wsign-conversion -Wpacked -Wdangling-else -Wparentheses
-CFLAGS    += -Wdate-time -Wjump-misses-init -Waggregate-return
-CFLAGS    += -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes
-CFLAGS    += -Wmissing-declarations -Wnormalized=nfkc -Wredundant-decls
-CFLAGS    += -Wnested-externs -Wno-overlength-strings
+WARNINGS  += -pedantic -pedantic-errors -Wno-overlength-strings
+WARNINGS  += -fmax-errors=1 -Wall -Wextra -Wdouble-promotion -Wformat=2
+WARNINGS  += -Wformat-signedness -Wvla -Wformat-truncation=2 -Wformat-overflow=2
+WARNINGS  += -Wnull-dereference -Winit-self -Wuninitialized
+WARNINGS  += -Wimplicit-fallthrough=4 -Wstack-protector -Wmissing-include-dirs
+WARNINGS  += -Wshift-overflow=2 -Wswitch-default -Wswitch-enum
+WARNINGS  += -Wunused-parameter -Wunused-const-variable=2 -Wstrict-overflow=5
+WARNINGS  += -Wstringop-overflow=4 -Wstringop-truncation -Walloc-zero -Walloca
+WARNINGS  += -Warray-bounds -Wattribute-alias=2 -Wlogical-op
+WARNINGS  += -Wduplicated-branches -Wduplicated-cond -Wtrampolines -Wfloat-equal
+WARNINGS  += -Wshadow -Wunsafe-loop-optimizations -Wbad-function-cast
+WARNINGS  += -Wcast-qual -Wcast-align -Wwrite-strings -Wconversion
+WARNINGS  += -Wsign-conversion -Wpacked -Wdangling-else -Wparentheses
+WARNINGS  += -Wdate-time -Wjump-misses-init -Waggregate-return
+WARNINGS  += -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes
+WARNINGS  += -Wmissing-declarations -Wnormalized=nfkc -Wredundant-decls
+WARNINGS  += -Wnested-externs 
+
+CFLAGS    += -D_GNU_SOURCE $(INCS) -MMD -MP -std=c89 $(WARNINGS) -fPIE
+CFLAGS    += -ftrapv -fstack-protector
+
+LDFLAGS   += -pie -fPIE
 LDLIBS    += -lm
 
 build/$(TARGET): $(OBJS)

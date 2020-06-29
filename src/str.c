@@ -4,6 +4,7 @@
 #include "alloc.h"
 #include "checked.h"
 #include "str.h"
+#include "util.h"
 
 #define STRING_MIN_CAP 16
 
@@ -27,7 +28,7 @@ str_node_parent(struct str_node *node)
 	while (node->prev != NULL) {
 		node = node->prev;
 	}
-	return (void *)node;
+	return container_of(struct string, str_node, node);
 }
 
 void
