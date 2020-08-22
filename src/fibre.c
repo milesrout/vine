@@ -115,7 +115,8 @@ static
 void
 fibre_store_list_enqueue(struct fibre_store_list *list, struct fibre *fibre)
 {
-	struct fibre_store_node *node = container_of(struct fibre_store_node, fibre, fibre);
+	struct fibre_store_node *node =
+		container_of(struct fibre_store_node, fibre, fibre);
 
 	/* require that the fibre is not already in a list */
 	assert1(node->next == NULL);
@@ -140,7 +141,7 @@ fibre_store_list_enqueue(struct fibre_store_list *list, struct fibre *fibre)
 /* removes a fibre from the end of the list */
 static
 struct fibre *
-fibre_store_list_dequeue(struct fibre_store_list *list)
+try_fibre_store_list_dequeue(struct fibre_store_list *list)
 {
 	struct fibre_store_node *node;
 
@@ -198,32 +199,32 @@ struct fibre_store {
 	size_t stack_size;
 	struct alloc *alloc;
 	struct fibre_store_block *blocks;
+	/* the last list is for FS_EMPTY fibres */
 	struct fibre_store_list lists[FP_NUM_PRIOS + 1];
 };
-
-#define MAX (FIBRE_STORE_NODES_PER_BLOCK - 1)
 
 static
 struct fibre_store_block *
 fibre_store_block_create(struct fibre_store *store)
 {
-	struct fibre_store_block *block = allocate_with(store->alloc, sizeof *block);
+	struct fibre_store_block *block =
+		allocate_with(store->alloc, sizeof *block);
 	size_t i;
 
+#define MAX (FIBRE_STORE_NODES_PER_BLOCK - 1)
 	/* set up the nodes in the block to form a bidirectional linked list */
 	for (i = 0; i <= MAX; i++) {
 		block->nodes[i].prev = (i == 0) ? NULL : &block->nodes[i - 1];
 		block->nodes[i].next = (i == MAX) ? NULL : &block->nodes[i + 1];
 		fibre_setup(&block->nodes[i].fibre);
 	}
+#undef MAX
 	
 	block->next = store->blocks;
 	store->blocks = block;
 
 	return block;
 }
-
-#undef MAX
 
 /*
  * This takes fibres from the start of the list instead of the end, treating the
@@ -244,7 +245,8 @@ fibre_store_get_first_empty(struct fibre_store *store)
 
 		block = fibre_store_block_create(store);
 		empties_list->start = &block->nodes[0];
-		empties_list->end = &block->nodes[FIBRE_STORE_NODES_PER_BLOCK - 1];
+		empties_list->end =
+			&block->nodes[FIBRE_STORE_NODES_PER_BLOCK - 1];
 	}
 
 	/* assert that the list is non-empty */
@@ -278,7 +280,8 @@ fibre_store_get_next_ready(struct fibre_store *store)
 	size_t i;
 
 	for (i = 0; i < FP_NUM_PRIOS; i++) {
-		if (NULL != (fibre = fibre_store_list_dequeue(&store->lists[i]))) {
+		fibre = try_fibre_store_list_dequeue(&store->lists[i]);
+		if (fibre != NULL) {
 			return fibre;
 		}
 	}
@@ -290,35 +293,52 @@ static struct fibre *current_fibre;
 static struct fibre *main_fibre;
 static struct fibre_store global_fibre_store;
 
+
 void
 fibre_init(struct alloc *alloc, size_t stack_size)
 {
 	size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
 	size_t i;
 
-	log_info("fibre", "Initialising fibre system with %luMiB-sized stacks\n",
-	                  stack_size / 1024 / 1024);
+	log_info("fibre",
+		"Initialising fibre system with %luMiB-sized stacks\n",
+	        stack_size / 1024 / 1024);
 
-	if (sizeof(struct fibre_store_block) > page_size) {
-		log_warning("fibre", "fibre_store_block is too big to fit in a page: lower FIBRE_STORE_NODES_PER_BLOCK (%lu)\n", sizeof(struct fibre_store_block));
-	} else if (sizeof(struct fibre_store_block) + sizeof(struct fibre_store_node) <= page_size) {
-		log_notice("fibre", "fibre_store_block could be bigger: raise FIBRE_STORE_NODES_PER_BLOCK (%lu)\n", sizeof(struct fibre_store_block));
+#define BLOCK_SIZE (sizeof(struct fibre_store_block))
+#define NODE_SIZE (sizeof(struct fibre_store_node))
+	if (BLOCK_SIZE > page_size) {
+		log_warning("fibre",
+			"fibre_store_block is too big to fit in a page: "
+			"lower FIBRE_STORE_NODES_PER_BLOCK (%lu)\n",
+			BLOCK_SIZE);
+	} else if (BLOCK_SIZE + NODE_SIZE <= page_size) {
+		log_notice("fibre",
+			"fibre_store_block could be bigger: "
+			"raise FIBRE_STORE_NODES_PER_BLOCK (%lu)\n",
+			BLOCK_SIZE);
 	} else {
-		log_info("fibre", "fibre_store_block fits perfectly in a page (%lu)\n", sizeof(struct fibre_store_block));
+		log_info("fibre",
+			"fibre_store_block fits perfectly in a page (%lu)\n",
+			BLOCK_SIZE);
 	}
+#undef BLOCK_SIZE
+#undef NODE_SIZE
 
 	global_fibre_store.stack_size = stack_size;
 	global_fibre_store.alloc = alloc;
 	global_fibre_store.blocks = NULL;
 
+	/* not a bug: "<=" because there is one more list than priorities */
 	for (i = 0; i <= FP_NUM_PRIOS; i++) {
 		fibre_store_list_init(&global_fibre_store.lists[i]);
 	}
 
-	current_fibre = main_fibre = fibre_store_get_first_empty(&global_fibre_store);
+	main_fibre = fibre_store_get_first_empty(&global_fibre_store);
 	main_fibre->state = FS_ACTIVE;
 	main_fibre->prio = FP_NORMAL; /* is this right? */
 	main_fibre->stack = NULL;
+
+	current_fibre = main_fibre;
 }
 
 /* This should be further up, but the assertion requires it to be after the
@@ -336,9 +356,12 @@ fibre_store_destroy(struct fibre_store *store)
 			if (store->blocks->nodes[i].fibre.stack == NULL)
 				continue;
 			deallocate_with(store->alloc,
-				store->blocks->nodes[i].fibre.stack, store->stack_size);
+				store->blocks->nodes[i].fibre.stack,
+				store->stack_size);
 		}
-		deallocate_with(store->alloc, store->blocks, sizeof *store->blocks);
+		deallocate_with(store->alloc,
+			store->blocks,
+			sizeof *store->blocks);
 		store->blocks = next;
 	}
 }
@@ -349,8 +372,10 @@ fibre_finish(void)
 {
 	log_info("fibre", "Deinitialising fibre system\n");
 
-	log_info("fibre", "Fibre stat stack_allocs: %ld\n", fibre_stats.stack_allocs);
-	log_info("fibre", "Fibre stat fibre_go_calls: %ld\n", fibre_stats.fibre_go_calls);
+	log_info("fibre",
+		"Fibre stat stack_allocs: %ld\n", fibre_stats.stack_allocs);
+	log_info("fibre",
+		"Fibre stat fibre_go_calls: %ld\n", fibre_stats.fibre_go_calls);
 
 	fibre_store_destroy(&global_fibre_store);
 }
@@ -363,7 +388,9 @@ fibre_return(int ret)
 
 	if (current_fibre != main_fibre) {
 		current_fibre->state = FS_EMPTY;
-		fibre_store_list_enqueue(&global_fibre_store.lists[FP_NUM_PRIOS], current_fibre);
+		fibre_store_list_enqueue(
+			&global_fibre_store.lists[FP_NUM_PRIOS],
+			current_fibre);
 		/* TODO: When we finish with a fibre, we should mark its stack
 		 * as no longer needed.  For now we will deallocate it, but
 		 * constantly allocating and deallocating stacks might be

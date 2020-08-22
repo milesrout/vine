@@ -15,7 +15,8 @@ static void *
 mmap_allocate(struct alloc *a, size_t m)
 {
 	void *p;
-	p = mmap(NULL, m, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+	p = mmap(NULL, m, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS,
+		-1, 0);
 	VALGRIND_MALLOCLIKE_BLOCK(p, m, 0, 0);
 	log_debug("alloc_mmap", "Allocating 0x%lx bytes at %p\n", m, p);
 	(void)a;
@@ -39,7 +40,10 @@ mmap_deallocate(struct alloc *a, void *p, size_t n)
 	r = munmap(p, n);
 	VALGRIND_FREELIKE_BLOCK(p, 0);
 	if (r != 0) {
-		abort_with_error("munmap failed with arguments %p and %lu", p, n);
+		abort_with_error(
+			"munmap failed with arguments %p and %lu",
+			p,
+			n);
 	}
 	(void)a;
 }

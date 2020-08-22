@@ -17,7 +17,12 @@
 #error "May not include abort.h more than once"
 #endif
 #define VINE_ABORT_H_INCLUDED
-attribute_format_printf(1, 2) extern void abort_with_error(const char *fmt, ...);
+#ifdef __GNUC__
+#define attribute_noreturn __attribute__((noreturn))
+#else
+#define attribute_noreturn
+#endif
+attribute_format_printf(1, 2) extern void abort_with_error(const char *fmt, ...) attribute_noreturn;
 #define assert1(condition) do { if (!(condition)) abort_with_error("%s:%d: %s\n", __FILE__, __LINE__, #condition); } while (0)
 #define assert2(condition, message) do { if (!(condition)) abort_with_error("%s:%d: %s\n", __FILE__, __LINE__, message); } while (0)
 #ifndef VINE_PRINTF_H_INCLUDED

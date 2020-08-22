@@ -2,9 +2,9 @@
 		Vine coding style
 
 This document is derived from the Linux kernel coding style document.  The
-following paragraph (along with the entire document) was originally written
-by Linus Torvalds in the first person, but it represents my own view and so
-I have retained it.
+following paragraph (with s/vine/Linux/) along with the entire document) was
+originally written by Linus Torvalds in the first person, but it represents my
+own view and so I have retained it.
 
 This is a short document describing the preferred coding style for the
 vine project.  Coding style is very personal, and I won't _force_ my
