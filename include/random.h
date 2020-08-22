@@ -3,14 +3,11 @@
 #endif
 #define VINE_RANDOM_H_INCLUDED
 struct rng {
+	u32 state;
+	u32 counter;
+	u32 output;
 };
-extern void rng_init(struct rng *rng);
-extern uint32_t random(struct rng *rng);
-extern uint32_t randint(struct rng *rng, uint32_t max);
+extern void rng_init_seed(struct rng *rng, u32 seed);
+extern u32 rand32(struct rng *rng);
+extern u32 randint(struct rng *rng, u32 max);
 extern float randfloat(struct rng *rng);
-struct rng64 {
-};
-extern void rng64_init(struct rng64 *rng);
-extern uint64_t random64(struct rng64 *rng);
-extern uint64_t randint64(struct rng64 *rng, uint64_t max);
-extern double randfloat64(struct rng64 *rng);
