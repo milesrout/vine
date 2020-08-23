@@ -12,7 +12,7 @@
 #endif
 #define VINE_TABLE_H_INCLUDED
 struct tkey {
-	struct object obj;
+	struct object key;
 	u32 hash;
 };
 struct tpair {
@@ -25,7 +25,10 @@ struct table {
 	struct alloc *alloc;
 };
 extern struct table *table_new(struct alloc *, size_t initial_size);
+extern void table_deinit(struct table *table);
+extern void table_delete(struct table *table);
 extern void table_init(struct table *table, struct alloc *alloc, size_t initial_size);
+extern int table_equal(struct table *, struct table *);
 /* getting values from a table may fail for two reasons:
  * - the key might be missing
  * - the value might be of a different type
@@ -72,3 +75,17 @@ extern struct tkey table_key_z32(z32);
 extern struct tkey table_key_z64(z64);
 extern struct tkey table_key_int(int);
 extern struct tkey table_key_cstr(const char *);
+extern struct tkey table_key(struct object);
+struct table_object {
+	struct object_vtable *vtable;
+	struct table table;
+};
+extern void table_object_init(struct table_object *, struct alloc *, size_t);
+extern void object_init_as_table(struct object *, struct alloc *, size_t);
+extern struct object object_from_table(struct alloc *, size_t);
+extern int vobject_is_table(struct object_vtable **);
+extern int object_is_table(struct object *);
+extern struct table *vobject_as_table(struct object_vtable **);
+extern struct table *object_as_table(struct object *);
+extern int vobject_try_as_table(struct object_vtable **, struct table **);
+extern int object_try_as_table(struct object *, struct table **);

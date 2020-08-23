@@ -21,6 +21,10 @@ int
 g_loglevel = 8;
 
 static
+int
+g_logging_enabled = 1;
+
+static
 struct table
 g_system_loglevels = {0};
 
@@ -33,13 +37,20 @@ log_set_loglevel(int level)
 void
 log_set_system_loglevel(const char *system, int level)
 {
-	struct tkey k_system = table_key_cstr(system);
+	struct tkey k_system;
+
+	/* temporarily disable logging to avoid recursion */
+	g_logging_enabled = 0;
+
+	k_system = table_key_cstr(system);
 
 	if (g_system_loglevels.size == 0) {
 		table_init(&g_system_loglevels, &sys_alloc, SYSTEM_TABLE_SIZE);
 	}
 
 	table_set_int(&g_system_loglevels, k_system, level);
+
+	g_logging_enabled = 1;
 }
 
 static
@@ -65,20 +76,24 @@ void
 vlogf(int level, const char *system, const char *fmt, va_list args)
 {
 	int err, system_max;
+	struct tkey key;
 
-	if (level > g_loglevel) {
+	if (!g_logging_enabled)
 		return;
-	}
 
-	err = table_try_get_int(&g_system_loglevels, table_key_cstr(system), &system_max);
+	g_logging_enabled = 0;
+
+	key = table_key_cstr(system);
+
+	err = table_try_get_int(&g_system_loglevels, key, &system_max);
 	if (err == -1) {
 		/* key missing - use global loglevel */
 		if (level > g_loglevel)
-			return;
+			goto done;
 	} else if (err == 0) {
 		/* key present and correct type, use system loglevel */
 		if (level > system_max)
-			return;
+			goto done;
 	} else {
 		/* key present but incorrect type, abort */
 		abort_with_error("invalid log level type %d\n", err);
@@ -86,6 +101,9 @@ vlogf(int level, const char *system, const char *fmt, va_list args)
 
 	efprintf(stderr, "[%s] %s: ", level_to_string(level), system);
 	evfprintf(stderr, fmt, args);
+
+done:
+	g_logging_enabled = 1;
 }
 
 void

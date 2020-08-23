@@ -79,3 +79,9 @@ try_reallocarray_with(struct alloc *alloc, void *q, size_t m, size_t old, size_t
 
 	return try_reallocate_with(alloc, q, m * old, s);
 }
+
+void
+deallocarray_with(struct alloc *alloc, void *p, size_t m, size_t n)
+{
+	deallocate_with(alloc, p, mul_sz(m, n));
+}

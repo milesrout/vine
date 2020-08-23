@@ -8,82 +8,83 @@
 #error "May not include object.h more than once"
 #endif
 #define VINE_OBJECT_H_INCLUDED
+struct object_vtable {
+	const char *(*typename)(struct object_vtable **);
+	u32 (*hash)(struct object_vtable **);
+	int (*equal)(struct object_vtable **, struct object_vtable **);
+};
+extern const char *vobject_typename(struct object_vtable **);
+extern u32 vobject_hash(struct object_vtable **);
+extern int vobject_equal(struct object_vtable **, struct object_vtable **);
+#define DECLARE_PRIMITIVE_VOBJECT(name, type)\
+struct name##_object {\
+	struct object_vtable *vtable;\
+	type value;\
+};\
+extern void name##_object_init(struct name##_object *, type value); \
+extern struct object_vtable **vobject_from_##name(type);\
+extern int vobject_is_##name(struct object_vtable **);\
+extern type vobject_as_##name(struct object_vtable **);\
+extern int vobject_try_as_##name(struct object_vtable **, type *)
+DECLARE_PRIMITIVE_VOBJECT(u8,  u8);
+DECLARE_PRIMITIVE_VOBJECT(u16, u16);
+DECLARE_PRIMITIVE_VOBJECT(u32, u32);
+DECLARE_PRIMITIVE_VOBJECT(u64, u64);
+DECLARE_PRIMITIVE_VOBJECT(z8,  z8);
+DECLARE_PRIMITIVE_VOBJECT(z16, z16);
+DECLARE_PRIMITIVE_VOBJECT(z32, z32);
+DECLARE_PRIMITIVE_VOBJECT(z64, z64);
+DECLARE_PRIMITIVE_VOBJECT(int, int);
+DECLARE_PRIMITIVE_VOBJECT(cstr, const char *);
+DECLARE_PRIMITIVE_VOBJECT(float, float);
+DECLARE_PRIMITIVE_VOBJECT(double, double);
+struct indirect_object {
+	struct object_vtable *vtable;
+	struct object_vtable **value;
+};
+extern struct object_vtable indirect_object_vtable;
+#define INDIRECTLY_IS(actual, expected) ( \
+	(actual) == &indirect_object_vtable && \
+	*((struct indirect_object *)(actual))->value == (expected))
+#define INDIRECTLY(vtable) \
+	(((struct indirect_object *)(vtable))->value)
 struct object {
 	union {
-		u64    u64value;
-		z64    z64value;
-		void  *ptrvalue;
-		float  floatvalue;
-		double doublevalue;
-		char   bytesvalue[14];
+		struct object_vtable  *vtable;
+		struct u8_object       u8_value;
+		struct u16_object      u16_value;
+		struct u32_object      u32_value;
+		struct u64_object      u64_value;
+		struct z8_object       z8_value;
+		struct z16_object      z16_value;
+		struct z32_object      z32_value;
+		struct z64_object      z64_value;
+		struct int_object      int_value;
+		struct cstr_object     cstr_value;
+		struct float_object    float_value;
+		struct double_object   double_value;
+		struct indirect_object indirect;
 	} value;
-	u16 type;
 };
-
-extern int object_equal(struct object, struct object);
-
-extern struct object object_from_float(float);
-extern int object_is_float(struct object);
-extern float *object_as_float(struct object);
-extern int object_try_as_float(struct object, float *);
-
-extern struct object object_from_double(double);
-extern int object_is_double(struct object);
-extern double *object_as_double(struct object);
-extern int object_try_as_double(struct object, double *);
-
-extern struct object object_from_u8(u8);
-extern int object_is_u8(struct object);
-extern u8 object_as_u8(struct object);
-extern int object_try_as_u8(struct object, u8 *);
-
-extern struct object object_from_u16(u16);
-extern int object_is_u16(struct object);
-extern u16 object_as_u16(struct object);
-extern int object_try_as_u16(struct object, u16 *);
-
-extern struct object object_from_u32(u32);
-extern int object_is_u32(struct object);
-extern u32 object_as_u32(struct object);
-extern int object_try_as_u32(struct object, u32 *);
-
-extern struct object object_from_u64(u64);
-extern int object_is_u64(struct object);
-extern u64 object_as_u64(struct object);
-extern int object_try_as_u64(struct object, u64 *);
-
-extern struct object object_from_z8(z8);
-extern int object_is_z8(struct object);
-extern z8 object_as_z8(struct object);
-extern int object_try_as_z8(struct object, z8 *);
-
-extern struct object object_from_z16(z16);
-extern int object_is_z16(struct object);
-extern z16 object_as_z16(struct object);
-extern int object_try_as_z16(struct object, z16 *);
-
-extern struct object object_from_z32(z32);
-extern int object_is_z32(struct object);
-extern z32 object_as_z32(struct object);
-extern int object_try_as_z32(struct object, z32 *);
-
-extern struct object object_from_z64(z64);
-extern int object_is_z64(struct object);
-extern z64 object_as_z64(struct object);
-extern int object_try_as_z64(struct object, z64 *);
-
-extern struct object object_from_int(int);
-extern int object_is_int(struct object);
-extern int object_as_int(struct object);
-extern int object_try_as_int(struct object, int *);
-
-extern struct object object_from_cstr(const char *);
-extern int object_is_cstr(struct object);
-extern const char *object_as_cstr(struct object);
-extern int object_try_as_cstr(struct object, const char **);
-
-struct table;
-extern struct object object_from_table(struct table *);
-extern int object_is_table(struct object);
-extern struct table *object_as_table(struct object);
-extern int object_try_as_table(struct object, struct table **);
+#define DECLARE_INLINE_OBJECT(name, type) \
+extern void object_init_from_##name(struct object *, type); \
+extern struct object object_from_##name(type); \
+extern int object_is_##name(struct object *); \
+extern type object_as_##name(struct object *); \
+extern int object_try_as_##name(struct object *, type *)
+DECLARE_INLINE_OBJECT(u8,  u8);
+DECLARE_INLINE_OBJECT(u16, u16);
+DECLARE_INLINE_OBJECT(u32, u32);
+DECLARE_INLINE_OBJECT(u64, u64);
+DECLARE_INLINE_OBJECT(z8,  z8);
+DECLARE_INLINE_OBJECT(z16, z16);
+DECLARE_INLINE_OBJECT(z32, z32);
+DECLARE_INLINE_OBJECT(z64, z64);
+DECLARE_INLINE_OBJECT(int, int);
+DECLARE_INLINE_OBJECT(cstr, const char *);
+DECLARE_INLINE_OBJECT(float, float);
+DECLARE_INLINE_OBJECT(double, double);
+DECLARE_INLINE_OBJECT(indirect, struct object_vtable **);
+extern const char *object_typename(struct object *);
+extern u32 object_hash(struct object *);
+extern int object_equal(struct object *, struct object *);

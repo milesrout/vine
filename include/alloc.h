@@ -22,3 +22,4 @@ extern void *allocarray_with(struct alloc *, size_t, size_t);
 extern void *reallocarray_with(struct alloc *, void *, size_t, size_t, size_t);
 extern void *try_allocarray_with(struct alloc *, size_t, size_t);
 extern void *try_reallocarray_with(struct alloc *, void *, size_t, size_t, size_t);
+extern void deallocarray_with(struct alloc *, void *, size_t, size_t);

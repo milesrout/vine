@@ -15,6 +15,7 @@
 #include "fibre.h"
 #include "random.h"
 #include "object.h"
+#include "table.h"
 
 #define MAX_FIBRES 128
 #define STACK_SIZE (4 * 1024 * 1024)
@@ -82,13 +83,13 @@ main(void)
 
 
 	log_set_loglevel(LOG_INFO);
-	log_set_system_loglevel("alloc_mmap", LOG_DEBUG);
 
 	{
 		struct rng rng;
 
 		rng_init_seed(&rng, (u32)(u64)(void *)&rng);
 
+		eprintf("fnv1a:\n");
 		eprintf("0x%08x\n", rand32(&rng));
 		eprintf("0x%08x\n", rand32(&rng));
 		eprintf("0x%08x\n", rand32(&rng));
@@ -97,11 +98,47 @@ main(void)
 	}
 
 	{
-		struct object obj1 = object_from_int(1);
-		struct object obj2 = object_from_cstr("2");
-		eprintf("1 == 1: %d\n", object_equal(obj1, obj1));
-		eprintf("1 == \"2\": %d\n", object_equal(obj1, obj2));
-		eprintf("\"2\" == \"2\": %d\n", object_equal(obj2, obj2));
+		struct pcgrng rng;
+
+		pcgrng_init(&rng, (u64)(void *)&rng, 0);
+
+		eprintf("pcg:\n");
+		eprintf("0x%08x\n", pcgrng_rand(&rng));
+		eprintf("0x%08x\n", pcgrng_rand(&rng));
+		eprintf("0x%08x\n", pcgrng_rand(&rng));
+		eprintf("0x%08x\n", pcgrng_rand(&rng));
+		eprintf("0x%08x\n", pcgrng_rand(&rng));
+	}
+
+	{
+		struct object_vtable **vobj1 = vobject_from_int(1);
+		struct object_vtable **vobj2 = vobject_from_cstr("2");
+		eprintf("1 == 1: %d\n", vobject_equal(vobj1, vobj1));
+		eprintf("1 == '2': %d\n", vobject_equal(vobj1, vobj2));
+		eprintf("'2' == '2': %d\n", vobject_equal(vobj2, vobj2));
+		deallocate(vobj1, sizeof(struct int_object));
+		deallocate(vobj2, sizeof(struct cstr_object));
+	}
+
+	{
+		struct object obj1, obj2;
+		object_init_from_int(&obj1, 1);
+		object_init_from_cstr(&obj2, "2");
+		eprintf("1 == 1: %d\n", object_equal(&obj1, &obj1));
+		eprintf("1 == '2': %d\n", object_equal(&obj1, &obj2));
+		eprintf("'2' == '2': %d\n", object_equal(&obj2, &obj2));
+	}
+
+	{
+		struct object t;
+		struct indirect_object *io;
+		struct table_object *to;
+		object_init_as_table(&t, &sys_alloc, 16);
+		eprintf("table: %s\n", object_typename(&t));
+		io = &t.value.indirect;
+		to = (struct table_object *)io->value;
+		table_deinit(&to->table);
+		deallocate(to, sizeof *to);
 	}
 
 	{
