@@ -1,7 +1,10 @@
 ifeq ($(BUILD),release)
 	CFLAGS += -O3 -s -DNDEBUG
+else ifeq ($(BUILD),sanitise)
+	CFLAGS += -O0 -g -Werror -fsanitize=address -fsanitize=undefined
+	LDFLAGS += -lasan -lubsan
 else
-	CFLAGS += -O0 -g -Werror 
+	CFLAGS += -O0 -g -Werror
 endif
 
 TARGET    := vine
