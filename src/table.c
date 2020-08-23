@@ -12,11 +12,14 @@
 static const char *table_object_typename(struct object_vtable **);
 static u32 table_object_hash(struct object_vtable **);
 static int table_object_equal(struct object_vtable **, struct object_vtable **);
+static struct object_vtable **table_object_copy(struct object_vtable **o);
+static void table_object_deinit(struct object_vtable **o);
+static void table_object_destroy(struct object_vtable **o, struct alloc *alloc);
 
 static int tkey_equal(struct tkey, struct tkey);
 
 struct table *
-table_new(struct alloc *alloc, size_t initial_size)
+table_create(struct alloc *alloc, size_t initial_size)
 {
 	struct table *table = allocate_with(alloc, sizeof(struct table));
 	struct tpair *pairs = allocarray_with(alloc,
@@ -31,7 +34,7 @@ table_new(struct alloc *alloc, size_t initial_size)
 }
 
 void
-table_delete(struct table *table)
+table_destroy(struct table *table)
 {
 	table_deinit(table);
 	deallocate_with(table->alloc, table, sizeof(struct table));
@@ -65,7 +68,10 @@ struct object_vtable
 table_object_vtable = {
 	&table_object_typename,
 	&table_object_hash,
-	&table_object_equal
+	&table_object_equal,
+	&table_object_copy,
+	&table_object_deinit,
+	&table_object_destroy
 };
 
 void
@@ -75,6 +81,7 @@ table_object_init(struct table_object *t, struct alloc *alloc, size_t initial_si
 	table_init(&t->table, alloc, initial_size);
 }
 
+static
 const char *
 table_object_typename(struct object_vtable **obj)
 {
@@ -82,6 +89,7 @@ table_object_typename(struct object_vtable **obj)
 	return "table";
 }
 
+static
 u32
 table_object_hash(struct object_vtable **obj)
 {
@@ -89,6 +97,7 @@ table_object_hash(struct object_vtable **obj)
 	abort_with_error("mutable objects like tables are not hashable");
 }
 
+static
 int
 table_object_equal(struct object_vtable **l, struct object_vtable **r)
 {
@@ -102,6 +111,30 @@ table_object_equal(struct object_vtable **l, struct object_vtable **r)
 	else
 		return 0;
 	return table_equal(&lo->table, &ro->table);
+}
+
+static
+struct object_vtable **
+table_object_copy(struct object_vtable **o)
+{
+	(void)o;
+	abort_with_error("table copying not yet implemented");
+}
+
+static
+void
+table_object_deinit(struct object_vtable **obj)
+{
+	struct table_object *o = (struct table_object *)obj;
+	table_deinit(&o->table);
+}
+
+static
+void
+table_object_destroy(struct object_vtable **o, struct alloc *alloc)
+{
+	table_object_deinit(o);
+	deallocate_with(alloc, o, sizeof(struct table_object));
 }
 
 int
@@ -138,16 +171,16 @@ vobject_try_as_table(struct object_vtable **vtable, struct table **table)
 }
 
 void
-object_init_as_table(struct object *obj, struct alloc *alloc, size_t initial_size)
+object_init_as_table(union object *obj, struct alloc *alloc, size_t initial_size)
 {
 	struct table_object *to = allocate_with(alloc, sizeof(struct table_object));
 	table_object_init(to, alloc, initial_size);
-	obj->value.indirect.vtable = &indirect_object_vtable;
-	obj->value.indirect.value = &to->vtable;
+	obj->indirect.vtable = &indirect_object_vtable;
+	obj->indirect.value = &to->vtable;
 }
 
 /*
-struct object
+union object
 object_from_table(struct alloc *alloc, size_t initial_size)
 {
 
@@ -155,21 +188,21 @@ object_from_table(struct alloc *alloc, size_t initial_size)
 */
 
 int
-object_is_table(struct object *o)
+object_is_table(union object *o)
 {
-	return vobject_is_table(&o->value.vtable);
+	return vobject_is_table(&o->vtable);
 }
 
 struct table *
-object_as_table(struct object *o)
+object_as_table(union object *o)
 {
-	return vobject_as_table(&o->value.vtable);
+	return vobject_as_table(&o->vtable);
 }
 
 int
-object_try_as_table(struct object *o, struct table **value)
+object_try_as_table(union object *o, struct table **value)
 {
-	return vobject_try_as_table(&o->value.vtable, value);
+	return vobject_try_as_table(&o->vtable, value);
 }
 
 #define DEFINE_SIMPLE_TABLE_GET_SET(typename) \
@@ -236,15 +269,15 @@ static
 int
 tkey_equal(struct tkey k1, struct tkey k2)
 {
-	return k1.hash == k2.hash && object_equal(&k1.key, &k2.key);
+	return k1.hash == k2.hash && object_equal(k1.key, k2.key);
 }
 
 struct tkey
-table_key(struct object obj)
+table_key(union object obj)
 {
 	struct tkey k;
 	k.key = obj;
-	k.hash = object_hash(&obj);
+	k.hash = object_hash(obj);
 	return k;
 }
 

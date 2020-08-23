@@ -116,29 +116,28 @@ main(void)
 		eprintf("1 == 1: %d\n", vobject_equal(vobj1, vobj1));
 		eprintf("1 == '2': %d\n", vobject_equal(vobj1, vobj2));
 		eprintf("'2' == '2': %d\n", vobject_equal(vobj2, vobj2));
+		vobject_destroy(vobj1, &sys_alloc);
+		vobject_destroy(vobj2, &sys_alloc);
+		/*
 		deallocate(vobj1, sizeof(struct int_object));
 		deallocate(vobj2, sizeof(struct cstr_object));
+		*/
 	}
 
 	{
-		struct object obj1, obj2;
+		union object obj1, obj2;
 		object_init_from_int(&obj1, 1);
 		object_init_from_cstr(&obj2, "2");
-		eprintf("1 == 1: %d\n", object_equal(&obj1, &obj1));
-		eprintf("1 == '2': %d\n", object_equal(&obj1, &obj2));
-		eprintf("'2' == '2': %d\n", object_equal(&obj2, &obj2));
+		eprintf("1 == 1: %d\n", object_equal(obj1, obj1));
+		eprintf("1 == '2': %d\n", object_equal(obj1, obj2));
+		eprintf("'2' == '2': %d\n", object_equal(obj2, obj2));
 	}
 
 	{
-		struct object t;
-		struct indirect_object *io;
-		struct table_object *to;
+		union object t;
 		object_init_as_table(&t, &sys_alloc, 16);
-		eprintf("table: %s\n", object_typename(&t));
-		io = &t.value.indirect;
-		to = (struct table_object *)io->value;
-		table_deinit(&to->table);
-		deallocate(to, sizeof *to);
+		eprintf("table: %s\n", object_typename(t));
+		object_destroy(t, &sys_alloc);
 	}
 
 	{

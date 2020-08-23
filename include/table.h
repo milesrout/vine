@@ -12,21 +12,21 @@
 #endif
 #define VINE_TABLE_H_INCLUDED
 struct tkey {
-	struct object key;
+	union object key;
 	u32 hash;
 };
 struct tpair {
 	struct tkey key;
-	struct object value;
+	union object value;
 };
 struct table {
 	size_t size, capacity;
 	struct tpair *pairs;
 	struct alloc *alloc;
 };
-extern struct table *table_new(struct alloc *, size_t initial_size);
+extern struct table *table_create(struct alloc *, size_t initial_size);
 extern void table_deinit(struct table *table);
-extern void table_delete(struct table *table);
+extern void table_destroy(struct table *table);
 extern void table_init(struct table *table, struct alloc *alloc, size_t initial_size);
 extern int table_equal(struct table *, struct table *);
 /* getting values from a table may fail for two reasons:
@@ -75,17 +75,17 @@ extern struct tkey table_key_z32(z32);
 extern struct tkey table_key_z64(z64);
 extern struct tkey table_key_int(int);
 extern struct tkey table_key_cstr(const char *);
-extern struct tkey table_key(struct object);
+extern struct tkey table_key(union object);
 struct table_object {
 	struct object_vtable *vtable;
 	struct table table;
 };
 extern void table_object_init(struct table_object *, struct alloc *, size_t);
-extern void object_init_as_table(struct object *, struct alloc *, size_t);
-extern struct object object_from_table(struct alloc *, size_t);
+extern void object_init_as_table(union object *, struct alloc *, size_t);
+extern union object object_from_table(struct alloc *, size_t);
 extern int vobject_is_table(struct object_vtable **);
-extern int object_is_table(struct object *);
+extern int object_is_table(union object *);
 extern struct table *vobject_as_table(struct object_vtable **);
-extern struct table *object_as_table(struct object *);
+extern struct table *object_as_table(union object *);
 extern int vobject_try_as_table(struct object_vtable **, struct table **);
-extern int object_try_as_table(struct object *, struct table **);
+extern int object_try_as_table(union object *, struct table **);
