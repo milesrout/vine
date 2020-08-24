@@ -5,7 +5,5 @@
 #error "May not include hash.h more than once"
 #endif
 #define VINE_HASH_H_INCLUDED
-extern u32 fnv1a32(const u8 *data, size_t len);
 extern u64 fnv1a(const u8 *data, size_t len);
-extern u32 fnv1a32_nt(const u8 *data);
 extern u64 fnv1a_nt(const u8 *data);

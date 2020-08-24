@@ -15,7 +15,7 @@ vobject_typename(struct object_vtable **obj)
 	return (*obj)->typename(obj);
 }
 
-u32
+u64
 vobject_hash(struct object_vtable **obj)
 {
 	return (*obj)->hash(obj);
@@ -63,7 +63,7 @@ name##_object_vtable = { \
 #define DEFINE_PRIMITIVE_VOBJECT(name, type) \
 static struct object_vtable name##_object_vtable; \
 static int name##_object_equal(struct object_vtable **l, struct object_vtable **r); \
-static u32 name##_object_hash(struct object_vtable **); \
+static u64 name##_object_hash(struct object_vtable **); \
 \
 void \
 name##_object_init(struct name##_object *obj, type value) \
@@ -164,11 +164,11 @@ name##_object_equal(struct object_vtable **l, struct object_vtable **r) \
 	return lo->value == ro->value; \
 } \
 static \
-u32 \
+u64 \
 name##_object_hash(struct object_vtable **obj) \
 { \
 	struct name##_object *o = (struct name##_object *)obj; \
-	return fnv1a32((u8 *)&o->value, sizeof o->value); \
+	return fnv1a((u8 *)&o->value, sizeof o->value); \
 }
 
 DEFINE_BUILTIN_EQUALITY_OBJECT(u8,  u8)
@@ -191,11 +191,11 @@ cstr_object_equal(struct object_vtable **l, struct object_vtable **r)
 }
 
 static
-u32
+u64
 cstr_object_hash(struct object_vtable **obj)
 {
 	struct cstr_object *o = (struct cstr_object *)obj;
-	return fnv1a32_nt((const u8 *)o->value);
+	return fnv1a_nt((const u8 *)o->value);
 }
 
 static
@@ -216,7 +216,7 @@ indirect_object_equal(struct object_vtable **l, struct object_vtable **r)
 }
 
 static
-u32
+u64
 indirect_object_hash(struct object_vtable **obj)
 {
 	struct indirect_object *o = (struct indirect_object *)obj;
@@ -265,7 +265,7 @@ object_typename(union object o)
 	return vobject_typename(&o.vtable);
 }
 
-u32
+u64
 object_hash(union object o)
 {
 	return vobject_hash(&o.vtable);

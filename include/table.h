@@ -13,7 +13,7 @@
 #define VINE_TABLE_H_INCLUDED
 struct tkey {
 	union object key;
-	u32 hash;
+	u64 hash;
 };
 struct tpair {
 	struct tkey key;

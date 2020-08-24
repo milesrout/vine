@@ -10,7 +10,7 @@
 #include "table.h"
 
 static const char *table_object_typename(struct object_vtable **);
-static u32 table_object_hash(struct object_vtable **);
+static u64 table_object_hash(struct object_vtable **);
 static int table_object_equal(struct object_vtable **, struct object_vtable **);
 static struct object_vtable **table_object_copy(struct object_vtable **o);
 static void table_object_deinit(struct object_vtable **o);
@@ -90,7 +90,7 @@ table_object_typename(struct object_vtable **obj)
 }
 
 static
-u32
+u64
 table_object_hash(struct object_vtable **obj)
 {
 	(void)obj;
@@ -287,7 +287,7 @@ table_key_##name(name value) \
 {\
 	struct tkey key;\
 \
-	key.hash = fnv1a32((u8 *)&value, sizeof(name));\
+	key.hash = fnv1a((u8 *)&value, sizeof(name));\
 	object_init_from_##name(&key.key, value); \
 \
 	return key;\
@@ -323,7 +323,7 @@ table_key_cstr(const char *value)
 {
 	struct tkey key;
 
-	key.hash = fnv1a32_nt((const u8 *)value);
+	key.hash = fnv1a_nt((const u8 *)value);
 	object_init_from_cstr(&key.key, value);
 
 	return key;

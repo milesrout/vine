@@ -10,14 +10,14 @@
 #define VINE_OBJECT_H_INCLUDED
 struct object_vtable {
 	const char *(*typename)(struct object_vtable **);
-	u32 (*hash)(struct object_vtable **);
+	u64 (*hash)(struct object_vtable **);
 	int (*equal)(struct object_vtable **, struct object_vtable **);
 	struct object_vtable **(*copy)(struct object_vtable **);
 	void (*deinit)(struct object_vtable **);
 	void (*destroy)(struct object_vtable **, struct alloc *);
 };
 extern const char *vobject_typename(struct object_vtable **);
-extern u32 vobject_hash(struct object_vtable **);
+extern u64 vobject_hash(struct object_vtable **);
 extern int vobject_equal(struct object_vtable **, struct object_vtable **);
 extern struct object_vtable **vobject_copy(struct object_vtable **);
 extern void vobject_deinit(struct object_vtable **);
@@ -90,7 +90,7 @@ DECLARE_INLINE_OBJECT(float, float);
 DECLARE_INLINE_OBJECT(double, double);
 DECLARE_INLINE_OBJECT(indirect, struct object_vtable **);
 extern const char *object_typename(union object);
-extern u32 object_hash(union object);
+extern u64 object_hash(union object);
 extern int object_equal(union object, union object);
 extern union object object_copy(union object);
 extern void object_deinit(union object);

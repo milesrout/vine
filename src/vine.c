@@ -44,12 +44,12 @@ autism = "I'd just like to interject for a moment.  What you're referring to"
 static void
 test_hash_string(const char *str, size_t len)
 {
-	u32 hash = fnv1a32((const u8 *)str, len);
+	u64 hash = fnv1a((const u8 *)str, len);
 	size_t actual = len;
 	if (len <= 64) {
-		eprintf("\"%.*s\" (len %lu) hashes to %x\n", (int)len, str, actual, hash);
+		eprintf("\"%.*s\" (len %lu) hashes to %lx\n", (int)len, str, actual, hash);
 	} else {
-		eprintf("\"%.*s...\" (len %lu) hashes to %x\n", 61, str, actual, hash);
+		eprintf("\"%.*s...\" (len %lu) hashes to %lx\n", 61, str, actual, hash);
 	}
 }
 

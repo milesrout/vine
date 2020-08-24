@@ -3,46 +3,36 @@
 #include "types.h"
 #include "hash.h"
 
-#define FNV_OFFSET_BASIS 0xcbf29ce484222325
-#define FNV_PRIME        0x00000100000001b3
+#ifdef __GNUC__
+#define FNV_OFFSET_BASIS_128 U128_LITERAL(0x0000000001000000, 0x000000000000013B)
+#define FNV_PRIME_128        U128_LITERAL(0x6c62272e07bb0142, 0x62b821756295c58d)
 
 u64
 fnv1a_nt(const u8 *data)
 {
-	u64 hash = FNV_OFFSET_BASIS;
+	u128 hash = FNV_OFFSET_BASIS_128;
 
 	while (*data) {
 		hash = hash ^ *data++;
-		hash = hash * FNV_PRIME;
+		hash = hash * FNV_PRIME_128;
 	}
 
-	return hash;
+	return (u64)(hash >> 64) ^ (u64)hash;
 }
 
 u64
 fnv1a(const u8 *data, size_t len)
 {
-	u64 hash = FNV_OFFSET_BASIS;
+	u128 hash = FNV_OFFSET_BASIS_128;
 	size_t i = 0;
 
 	for (; i < len; i++) {
 		hash = hash ^ data[i];
-		hash = hash * FNV_PRIME;
+		hash = hash * FNV_PRIME_128;
 	}
 
-	return hash;
+	return (u64)(hash >> 64) ^ (u64)hash;
 }
-
-u32
-fnv1a32_nt(const u8 *data)
-{
-	u64 hash = fnv1a_nt(data);
-	return (u32)(hash >> 32) ^ (u32)hash;
-}
-
-u32
-fnv1a32(const u8 *data, size_t len)
-{
-	u64 hash = fnv1a(data, len);
-	return (u32)(hash >> 32) ^ (u32)hash;
-}
+#else
+#error "128-bit arithmetic is not implemented for your platform"
+#endif
