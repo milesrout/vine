@@ -18,7 +18,7 @@ mmap_allocate(struct alloc *a, size_t m)
 	p = mmap(NULL, m, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS,
 		-1, 0);
 	VALGRIND_MALLOCLIKE_BLOCK(p, m, 0, 0);
-	log_debug("alloc_mmap", "Allocating 0x%lx bytes at %p\n", m, p);
+	log_debug("alloc_mmap", "Allocating %lu bytes at %p\n", m, p);
 	(void)a;
 	return p;
 }
@@ -29,6 +29,8 @@ mmap_reallocate(struct alloc *a, void *q, size_t m, size_t n)
 	void *p = mremap(q, m, n, 0 /* |MREMAP_MAYMOVE */);
 	VALGRIND_RESIZEINPLACE_BLOCK(p, m, n, 0);
 	(void)a;
+	log_debug("alloc_mmap", "Reallocating %lu -> %lu bytes at %p to %p\n",
+		m, n, q, p);
 	return p;
 }
 
@@ -36,7 +38,7 @@ static void
 mmap_deallocate(struct alloc *a, void *p, size_t n)
 {
 	int r;
-	log_debug("alloc_mmap", "Deallocating 0x%lx bytes at %p\n", n, p);
+	log_debug("alloc_mmap", "Deallocating %lu bytes at %p\n", n, p);
 	r = munmap(p, n);
 	VALGRIND_FREELIKE_BLOCK(p, 0);
 	if (r != 0) {

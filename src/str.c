@@ -1,10 +1,12 @@
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 #include "abort.h"
 #include "alloc.h"
 #include "checked.h"
 #include "str.h"
 #include "util.h"
+#include "printf.h"
 
 #define STRING_MIN_CAP 16
 
@@ -18,6 +20,7 @@ destroy(struct string *str)
 	}
 	str->str_cap = 0;
 	str->str_alloc = NULL;
+	str->str_viewalloc = NULL;
 	str->str_node.prev = NULL;
 	str->str_node.next = NULL;
 }
@@ -38,6 +41,7 @@ string_init(struct string *str)
 	str->str_cap = 0;
 	str->str_str = NULL;
 	str->str_alloc = &sys_alloc;
+	str->str_viewalloc = str->str_alloc;
 	str->str_node.prev = NULL;
 	str->str_node.next = NULL;
 	str->str_finished = 0;
@@ -54,6 +58,7 @@ string_init_with(struct string *str, struct alloc *alloc, size_t cap)
 		str->str_str = allocate_with(alloc, cap);
 	}
 	str->str_alloc = alloc;
+	str->str_viewalloc = str->str_alloc;
 	str->str_node.prev = NULL;
 	str->str_node.next = NULL;
 	str->str_finished = 0;
@@ -123,12 +128,20 @@ string_append_cstring(struct string *str, const char *cstr)
 {
 	size_t len = strlen(cstr);
 
+	eprintf("old capacity %lu\n", str->str_cap);
+	eprintf("old length %lu\n", str->str_len);
+
 	if (str->str_len + len >= str->str_cap) {
 		string_expand_by(str, len);
 	}
 
+	eprintf("new capacity %lu\n", str->str_cap);
+	eprintf("cstr length %lu\n", len);
+
 	strncpy(str->str_str + str->str_len, cstr, len);
 	str->str_len += len;
+
+	eprintf("new length %lu\n", str->str_len);
 }
 
 void
@@ -150,7 +163,7 @@ struct strview *
 string_as_view(struct string *str)
 {
 	struct str_node sv_node;
-	struct strview *sv = allocate_with(str->str_alloc, sizeof *sv);
+	struct strview *sv = allocate_with(str->str_viewalloc, sizeof *sv);
 
 	sv_node.prev = &str->str_node;
 	sv_node.next = str->str_node.next;
@@ -167,10 +180,31 @@ string_as_view(struct string *str)
 	return sv;
 }
 
+struct strview *
+string_substr(struct string *str, size_t start, size_t len)
+{
+	struct str_node sv_node;
+	struct strview *sv = allocate_with(str->str_viewalloc, sizeof *sv);
+
+	sv_node.prev = &str->str_node;
+	sv_node.next = str->str_node.next;
+
+	sv->sv_len = len;
+	sv->sv_str = str->str_str + start;
+	sv->sv_node = sv_node;
+
+	if (str->str_node.next != NULL) {
+		str->str_node.next->prev = &sv->sv_node;
+	}
+	str->str_node.next = &sv->sv_node;
+
+	return sv;
+}
+
 void strview_destroy(struct strview *sv)
 {
 	struct string *str = str_node_parent(&sv->sv_node);
-	struct alloc *alloc = str->str_alloc;
+	struct alloc *alloc = str->str_viewalloc;
 
 	sv->sv_len = 0;
 	sv->sv_str = NULL;

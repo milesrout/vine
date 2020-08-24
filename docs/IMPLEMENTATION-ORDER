@@ -14,8 +14,9 @@ The first step is to implement a runtime environment which will form the basis
 for the Vine VM and as a general programming library for the C code. This
 runtime environment will provide for safe light-weight tasks along with a
 general library with STRINGS, pointers, ALLOCATORS, date and time, STRING
-VIEWS, HASHING, hash tables, queues, iterators, random number generation, safe
-i/o, string conversions, error handling, localisation, etc.
+VIEWS, HASHING, HASH TABLES, queues, iterators, RANDOM NUMBER GENERATION, safe
+i/o, string conversions, error handling, localisation, arbitrary precision
+integer/rational/real arithmetic, etc.
 
 The second step is to write or integrate an interpreter for a simple
 programming language on top of this runtime environment. Something like Scheme

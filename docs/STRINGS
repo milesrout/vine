@@ -12,14 +12,14 @@ different string literals point into overlapping strings, so modifying one
 could modify another.  The compiler will also assume you do not do so, and
 could assume that any code that does do so is unreachable and elide it.
 
-Next there is the humble C string: a pointer to a null-terminated array of
-characters, which is *not* necessarily immutable, even if it is being accessed
-through a pointer-to-const-char.  These are notoriously error-prone and should
-be avoided at all costs.  When they are necessary for interfacing with
-third-party APIs they should be converted to a reasonable string representation
-if at all possible.  It should be unusual for a third-party API to force us to
-deal with mutable char* strings in-place, though, so they shouldn't be very
-common.
+Next there is the humble standard C string: a pointer to a null-terminated
+array of characters, which is *not* necessarily immutable, even if it is being
+accessed through a pointer-to-const-char.  These are notoriously error-prone
+and should be avoided at all costs.  When they are necessary for interfacing
+with third-party APIs they should be converted to a reasonable string
+representation if at all possible.  It should be unusual for a third-party API
+to force us to deal with mutable char* strings in-place, though, so they
+shouldn't be very common.
 
 Next we have fixed-length, length-prefixed, heap-allocated strings: 'struct
 string *' and its friends.  These should nearly always be immutable, because
@@ -34,3 +34,22 @@ reallocated when the array needs to be resized.
 Then there are ropes.  Ropes are most suitable for very large strings that have
 to change a lot.
 
+struct heapstring *: heap-allocated string using a flexible array member. the
+create/expand/destroy functions take an allocator, but do not store or remember
+the allocator, so the caller must remember it. they do store and remember their
+capacity. internally, expanded using reallocate_with. the caller must manage
+the capacity and resize when necessary using the provided function.
+
+struct strbuf: (probably-)stack-allocated handle to a simple resizeable
+string. the string remembers its allocator and uses it to resize itself. the
+string manages its capacity and resizes itself when necessary.
+
+struct string: (probably-)stack-allocated handle to a more complicated
+resizeable string. the string remembers its allocator and a reference count for
+its (sub-)string views. (sub-)string views are allocated using the internal
+allocator unless the user sets a different view allocator (str_viewalloc
+field). this is useful if the string itself is allocated from a buffer
+allocator and needs to be able to be resized within that buffer, for
+example. the string manages its capacity and resizes itself when
+necessary. string views keep the original string alive, but must not outlive
+the struct string.

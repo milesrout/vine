@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -5,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "types.h"
+#include "abort.h"
 #include "printf.h"
 #include "log.h"
 #include "memory.h"
@@ -16,6 +18,7 @@
 #include "random.h"
 #include "object.h"
 #include "table.h"
+#include "heapstring.h"
 
 #define MAX_FIBRES 128
 #define STACK_SIZE (4 * 1024 * 1024)
@@ -81,8 +84,15 @@ main(void)
 {
 	counter = 0;
 
+	log_set_loglevel(LOG_DEBUG);
 
-	log_set_loglevel(LOG_INFO);
+	{
+		size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
+		if (page_size != PAGE_SIZE) {
+			abort_with_error("Page size must be %lu, but is %lu\n",
+				PAGE_SIZE, page_size);
+		}
+	}
 
 	{
 		struct rng rng;
@@ -118,10 +128,6 @@ main(void)
 		eprintf("'2' == '2': %d\n", vobject_equal(vobj2, vobj2));
 		vobject_destroy(vobj1, &sys_alloc);
 		vobject_destroy(vobj2, &sys_alloc);
-		/*
-		deallocate(vobj1, sizeof(struct int_object));
-		deallocate(vobj2, sizeof(struct cstr_object));
-		*/
 	}
 
 	{
@@ -141,9 +147,19 @@ main(void)
 	}
 
 	{
+		struct heapstring *hs1 = heapstring_create(HEAPSTRING_PAGE_CAP,
+			&mmap_alloc);
+		heapstring_destroy(hs1, &mmap_alloc);
+	}
+
+	{
+		char buf[4096];
+		struct buf_alloc buf_alloc;
 		struct string str;
 		struct strview *sv, *sv_all;
-		string_init_with(&str, &sys_alloc, 16);
+		buf_alloc_init(&buf_alloc, buf, 4096);
+		string_init_with(&str, &buf_alloc.ba_alloc, 16);
+		str.str_viewalloc = &sys_alloc;
 		string_append_cstring(&str, autism);
 		string_expand_to(&str, 4096);
 		sv = string_as_view(&str);

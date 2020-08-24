@@ -1,12 +1,13 @@
 #include <stddef.h>
 #include "abort.h"
 #include "memory.h"
+#include "alloc.h"
 #include "heapstring.h"
 
 #define STRING_MIN_CAP 16
 
 struct heapstring *
-heapstring_create(size_t cap)
+heapstring_create(size_t cap, struct alloc *a)
 {
 	struct heapstring *str;
 
@@ -14,23 +15,22 @@ heapstring_create(size_t cap)
 		cap = STRING_MIN_CAP;
 	}
 
-	str = allocate(sizeof *str + cap - 1);
+	str = allocate_with(a, sizeof *str + cap - 1);
 	str->hs_cap = cap;
 
 	return str;
 }
 
 struct heapstring *
-heapstring_expand(struct heapstring *str, size_t newcap)
+heapstring_expand(struct heapstring *str, struct alloc *a, size_t newcap)
 {
-	(void)str;
-	(void)newcap;
-	abort_with_error("Unimplemented!");
-	return NULL;
+	return reallocate_with(a, str,
+		sizeof *str + str->hs_cap - 1,
+		sizeof *str + newcap - 1);
 }
 
 void
-heapstring_destroy(struct heapstring *str)
+heapstring_destroy(struct heapstring *str, struct alloc *a)
 {
-	deallocate(str, sizeof *str + str->hs_cap - 1);
+	deallocate_with(a, str, sizeof *str + str->hs_cap - 1);
 }
