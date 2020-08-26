@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "types.h"
 #include "abort.h"
 #include "printf.h"
@@ -35,20 +36,24 @@ log_set_loglevel(int level)
 }
 
 void
+log_init(void)
+{
+	table_init(&g_system_loglevels, &sys_alloc, SYSTEM_TABLE_SIZE);
+}
+
+void
+log_finish(void)
+{
+	table_finish(&g_system_loglevels);
+}
+
+void
 log_set_system_loglevel(const char *system, int level)
 {
-	struct tkey k_system;
-
 	/* temporarily disable logging to avoid recursion */
 	g_logging_enabled = 0;
 
-	k_system = table_key_cstr(system);
-
-	if (g_system_loglevels.size == 0) {
-		table_init(&g_system_loglevels, &sys_alloc, SYSTEM_TABLE_SIZE);
-	}
-
-	table_set_int(&g_system_loglevels, k_system, level);
+	table_set_int(&g_system_loglevels, table_key_cstr(system), level);
 
 	g_logging_enabled = 1;
 }
@@ -76,16 +81,13 @@ void
 vlogf(int level, const char *system, const char *fmt, va_list args)
 {
 	int err, system_max;
-	struct tkey key;
 
 	if (!g_logging_enabled)
 		return;
 
 	g_logging_enabled = 0;
 
-	key = table_key_cstr(system);
-
-	err = table_try_get_int(&g_system_loglevels, key, &system_max);
+	err = table_try_get_int(&g_system_loglevels, table_key_cstr(system), &system_max);
 	if (err == -1) {
 		/* key missing - use global loglevel */
 		if (level > g_loglevel)
@@ -195,4 +197,3 @@ log_debug(const char *system, const char *fmt, ...)
 	vlogf(LOG_DEBUG, system, fmt, args);
 	va_end(args);
 }
-

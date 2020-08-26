@@ -23,8 +23,13 @@
 #define attribute_noreturn
 #endif
 attribute_format_printf(1, 2) extern void abort_with_error(const char *fmt, ...) attribute_noreturn;
-#define assert1(condition) do { if (!(condition)) abort_with_error("%s:%d: %s\n", __FILE__, __LINE__, #condition); } while (0)
+#if !defined(NDEBUG) || !defined(__GNUC__)
+#define assert1(condition)          assert2(condition, #condition)
 #define assert2(condition, message) do { if (!(condition)) abort_with_error("%s:%d: %s\n", __FILE__, __LINE__, message); } while (0)
+#else
+#define assert1(condition)          do { if (!(condition)) __builtin_unreachable(); } while (0)
+#define assert2(condition, message) assert1(condition)
+#endif
 #ifndef VINE_PRINTF_H_INCLUDED
 #undef attribute_format_printf
 #endif

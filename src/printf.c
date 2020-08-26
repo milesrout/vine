@@ -1,11 +1,11 @@
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include "abort.h"
-#include "_printf.h"
-
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "abort.h"
+#include "_printf.h"
 
 void
 evfprintf(FILE *file, const char *fmt, va_list args)

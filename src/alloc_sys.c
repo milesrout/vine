@@ -1,16 +1,15 @@
+#include <stdarg.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "alloc.h"
-
-#include <stdarg.h>
-#include <stdio.h>
 #include "printf.h"
-
 #include "log.h"
 
-static void *
+static
+void *
 sys_allocate(struct alloc *a, size_t m)
 {
 	void *p;
@@ -22,7 +21,8 @@ sys_allocate(struct alloc *a, size_t m)
 	return p;
 }
 
-static void *
+static
+void *
 sys_reallocate(struct alloc *a, void *q, size_t m, size_t n)
 {
 	void *p;
@@ -38,7 +38,8 @@ sys_reallocate(struct alloc *a, void *q, size_t m, size_t n)
 	return p;
 }
 
-static void
+static
+void
 sys_deallocate(struct alloc *a, void *p, size_t n)
 {
 	log_debug("alloc_sys", "Deallocating %lu bytes at %p\n", n, p);

@@ -1,9 +1,9 @@
 #include <unistd.h>
+#include <stdarg.h>
 #include <stddef.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdarg.h>
+#include <stdlib.h>
 
 #include "util.h"
 #include "alloc.h"
@@ -13,11 +13,15 @@
 #include "log.h"
 #include "memory.h"
 
+#ifdef VINE_USE_VALGRIND
+#include <valgrind/valgrind.h>
+#endif
+
 #include "fibre_switch.h"
 
 static struct {
-	long int stack_allocs;
-	long int fibre_go_calls;
+	long int fstat_stack_allocs;
+	long int fstat_fibre_go_calls;
 } fibre_stats = {0};
 
 /*
@@ -31,13 +35,13 @@ static struct {
  * pointer in this structure to that storage.
  */
 struct fibre_ctx {
-	uint64_t rsp;
-	uint64_t r15;
-	uint64_t r14;
-	uint64_t r13;
-	uint64_t r12;
-	uint64_t rbx;
-	uint64_t rbp;
+	uint64_t fc_rsp;
+	uint64_t fc_r15;
+	uint64_t fc_r14;
+	uint64_t fc_r13;
+	uint64_t fc_r12;
+	uint64_t fc_rbx;
+	uint64_t fc_rbp;
 };
 
 enum fibre_state {
@@ -69,45 +73,47 @@ enum fibre_prio {
  * to and how to switch to it.
  */
 struct fibre {
-	struct fibre_ctx ctx;
-	int state;
-	int prio;
-	char *stack;
+	struct fibre_ctx f_ctx;
+	short f_state;
+	short f_prio;
+	unsigned f_valgrind_id;
+	char *f_stack;
 };
 
 static
 void
 fibre_setup(struct fibre *fibre)
 {
-	/* ctx is invalid when state = EMPTY */
-	fibre->state = FS_EMPTY;
-	/* prio is invalid when state = EMPTY */
-	fibre->stack = NULL;
+	/* f_ctx is invalid when f_state = EMPTY */
+	fibre->f_state = FS_EMPTY;
+	/* f_prio is invalid when f_state = EMPTY */
+	/* f_valgrind_id is initialised when needed */
+	fibre->f_stack = NULL;
 }
 
 /*
  * This is a node in an intrusive bidirectional linked list of struct fibres.
  */
 struct fibre_store_node {
-	struct fibre_store_node *prev, *next;
-	struct fibre fibre;
+	struct fibre_store_node *fsn_prev, *fsn_next;
+	struct fibre fsn_fibre;
 };
 
 /*
  * This is the control block for a linked list of struct fibres.
  * it has two valid states:
- *   start===NULL & end===NULL -> list is empty
- *   start=/=NULL & end=/=NULL -> list is non-empty
+ *   fsl_start===NULL & fsl_end===NULL -> list is empty
+ *   fsl_start=/=NULL & fsl_end=/=NULL -> list is non-empty
  */
 struct fibre_store_list {
-	struct fibre_store_node *start, *end;
+	struct fibre_store_node *fsl_start, *fsl_end;
 };
 
 static
 void
 fibre_store_list_init(struct fibre_store_list *list)
 {
-	list->start = list->end = NULL;
+	list->fsl_start = list->fsl_end = NULL;
 }
 
 /* adds a fibre to the start of the list */
@@ -116,25 +122,25 @@ void
 fibre_store_list_enqueue(struct fibre_store_list *list, struct fibre *fibre)
 {
 	struct fibre_store_node *node =
-		container_of(struct fibre_store_node, fibre, fibre);
+		container_of(struct fibre_store_node, fsn_fibre, fibre);
 
 	/* require that the fibre is not already in a list */
-	assert1(node->next == NULL);
-	assert1(node->prev == NULL);
+	assert1(node->fsn_next == NULL);
+	assert1(node->fsn_prev == NULL);
 
-	if (list->start == NULL || list->end == NULL) {
-		assert1(list->start == NULL);
-		assert1(list->end == NULL);
+	if (list->fsl_start == NULL || list->fsl_end == NULL) {
+		assert1(list->fsl_start == NULL);
+		assert1(list->fsl_end == NULL);
 
-		list->start = node;
-		list->end = node;
+		list->fsl_start = node;
+		list->fsl_end = node;
 	} else {
-		assert1(list->start != NULL);
-		assert1(list->end != NULL);
+		assert1(list->fsl_start != NULL);
+		assert1(list->fsl_end != NULL);
 
-		list->start->prev = node;
-		node->next = list->start;
-		list->start = node;
+		list->fsl_start->fsn_prev = node;
+		node->fsn_next = list->fsl_start;
+		list->fsl_start = node;
 	}
 }
 
@@ -145,34 +151,34 @@ try_fibre_store_list_dequeue(struct fibre_store_list *list)
 {
 	struct fibre_store_node *node;
 
-	if (list->start == NULL || list->end == NULL) {
-		assert1(list->start == NULL);
-		assert1(list->end == NULL);
+	if (list->fsl_start == NULL || list->fsl_end == NULL) {
+		assert1(list->fsl_start == NULL);
+		assert1(list->fsl_end == NULL);
 
 		return NULL;
 	}
 
 	/* require that the list is non-empty */
-	assert1(list->start != NULL);
-	assert1(list->end != NULL);
+	assert1(list->fsl_start != NULL);
+	assert1(list->fsl_end != NULL);
 
 	/* these should just generally be true of *every* list */
-	assert1(list->start->prev == NULL);
-	assert1(list->end->next == NULL);
+	assert1(list->fsl_start->fsn_prev == NULL);
+	assert1(list->fsl_end->fsn_next == NULL);
 
-	node = list->end;
+	node = list->fsl_end;
 
-	if (node->prev == NULL) {
-		assert1(list->end == list->start);
-		list->start = list->end = NULL;
+	if (node->fsn_prev == NULL) {
+		assert1(list->fsl_end == list->fsl_start);
+		list->fsl_start = list->fsl_end = NULL;
 	} else {
-		assert1(list->end != list->start);
-		node->prev->next = NULL;
-		list->end = node->prev;
-		node->prev = NULL;
+		assert1(list->fsl_end != list->fsl_start);
+		node->fsn_prev->fsn_next = NULL;
+		list->fsl_end = node->fsn_prev;
+		node->fsn_prev = NULL;
 	}
 
-	return &node->fibre;
+	return &node->fsn_fibre;
 }
 
 /*
@@ -187,8 +193,8 @@ try_fibre_store_list_dequeue(struct fibre_store_list *list)
  * never deallocated, but the struct fibres within them can be reused.
  */
 struct fibre_store_block {
-	struct fibre_store_block *next;
-	struct fibre_store_node nodes[FIBRE_STORE_NODES_PER_BLOCK];
+	struct fibre_store_block *fsb_next;
+	struct fibre_store_node fsb_nodes[FIBRE_STORE_NODES_PER_BLOCK];
 };
 
 /*
@@ -196,11 +202,11 @@ struct fibre_store_block {
  * empty fibres.
  */
 struct fibre_store {
-	size_t stack_size;
-	struct alloc *alloc;
-	struct fibre_store_block *blocks;
+	size_t fs_stack_size;
+	struct alloc *fs_alloc;
+	struct fibre_store_block *fs_blocks;
 	/* the last list is for FS_EMPTY fibres */
-	struct fibre_store_list lists[FP_NUM_PRIOS + 1];
+	struct fibre_store_list fs_lists[FP_NUM_PRIOS + 1];
 };
 
 static
@@ -208,20 +214,20 @@ struct fibre_store_block *
 fibre_store_block_create(struct fibre_store *store)
 {
 	struct fibre_store_block *block =
-		allocate_with(store->alloc, sizeof *block);
+		allocate_with(store->fs_alloc, sizeof *block);
 	size_t i;
 
 #define MAX (FIBRE_STORE_NODES_PER_BLOCK - 1)
 	/* set up the nodes in the block to form a bidirectional linked list */
 	for (i = 0; i <= MAX; i++) {
-		block->nodes[i].prev = (i == 0) ? NULL : &block->nodes[i - 1];
-		block->nodes[i].next = (i == MAX) ? NULL : &block->nodes[i + 1];
-		fibre_setup(&block->nodes[i].fibre);
+		block->fsb_nodes[i].fsn_prev = (i == 0) ? NULL : &block->fsb_nodes[i - 1];
+		block->fsb_nodes[i].fsn_next = (i == MAX) ? NULL : &block->fsb_nodes[i + 1];
+		fibre_setup(&block->fsb_nodes[i].fsn_fibre);
 	}
 #undef MAX
 	
-	block->next = store->blocks;
-	store->blocks = block;
+	block->fsb_next = store->fs_blocks;
+	store->fs_blocks = block;
 
 	return block;
 }
@@ -234,42 +240,42 @@ static
 struct fibre *
 fibre_store_get_first_empty(struct fibre_store *store)
 {
-	struct fibre_store_list *empties_list = &store->lists[FP_NUM_PRIOS];
+	struct fibre_store_list *empties_list = &store->fs_lists[FP_NUM_PRIOS];
 	struct fibre_store_node *node;
 
-	if (empties_list->start == NULL || empties_list->end == NULL) {
+	if (empties_list->fsl_start == NULL || empties_list->fsl_end == NULL) {
 		struct fibre_store_block *block;
 
-		assert1(empties_list->start == NULL);
-		assert1(empties_list->end == NULL);
+		assert1(empties_list->fsl_start == NULL);
+		assert1(empties_list->fsl_end == NULL);
 
 		block = fibre_store_block_create(store);
-		empties_list->start = &block->nodes[0];
-		empties_list->end =
-			&block->nodes[FIBRE_STORE_NODES_PER_BLOCK - 1];
+		empties_list->fsl_start = &block->fsb_nodes[0];
+		empties_list->fsl_end =
+			&block->fsb_nodes[FIBRE_STORE_NODES_PER_BLOCK - 1];
 	}
 
 	/* assert that the list is non-empty */
-	assert1(empties_list->start != NULL);
-	assert1(empties_list->end != NULL);
+	assert1(empties_list->fsl_start != NULL);
+	assert1(empties_list->fsl_end != NULL);
 
 	/* these should just generally be true of *every* list */
-	assert1(empties_list->start->prev == NULL);
-	assert1(empties_list->end->next == NULL);
+	assert1(empties_list->fsl_start->fsn_prev == NULL);
+	assert1(empties_list->fsl_end->fsn_next == NULL);
 
-	node = empties_list->start;
+	node = empties_list->fsl_start;
 
-	if (node->next == NULL) {
-		assert1(empties_list->end == empties_list->start);
-		empties_list->start = empties_list->end = NULL;
+	if (node->fsn_next == NULL) {
+		assert1(empties_list->fsl_end == empties_list->fsl_start);
+		empties_list->fsl_start = empties_list->fsl_end = NULL;
 	} else {
-		assert1(empties_list->end != empties_list->start);
-		node->next->prev = NULL;
-		empties_list->start = node->next;
-		node->next = NULL;
+		assert1(empties_list->fsl_end != empties_list->fsl_start);
+		node->fsn_next->fsn_prev = NULL;
+		empties_list->fsl_start = node->fsn_next;
+		node->fsn_next = NULL;
 	}
 
-	return &node->fibre;
+	return &node->fsn_fibre;
 }
 
 static
@@ -280,7 +286,7 @@ fibre_store_get_next_ready(struct fibre_store *store)
 	size_t i;
 
 	for (i = 0; i < FP_NUM_PRIOS; i++) {
-		fibre = try_fibre_store_list_dequeue(&store->lists[i]);
+		fibre = try_fibre_store_list_dequeue(&store->fs_lists[i]);
 		if (fibre != NULL) {
 			return fibre;
 		}
@@ -324,19 +330,19 @@ fibre_init(struct alloc *alloc, size_t stack_size)
 #undef BLOCK_SIZE
 #undef NODE_SIZE
 
-	global_fibre_store.stack_size = stack_size;
-	global_fibre_store.alloc = alloc;
-	global_fibre_store.blocks = NULL;
+	global_fibre_store.fs_stack_size = stack_size;
+	global_fibre_store.fs_alloc = alloc;
+	global_fibre_store.fs_blocks = NULL;
 
 	/* not a bug: "<=" because there is one more list than priorities */
 	for (i = 0; i <= FP_NUM_PRIOS; i++) {
-		fibre_store_list_init(&global_fibre_store.lists[i]);
+		fibre_store_list_init(&global_fibre_store.fs_lists[i]);
 	}
 
 	main_fibre = fibre_store_get_first_empty(&global_fibre_store);
-	main_fibre->state = FS_ACTIVE;
-	main_fibre->prio = FP_NORMAL; /* is this right? */
-	main_fibre->stack = NULL;
+	main_fibre->f_state = FS_ACTIVE;
+	main_fibre->f_prio = FP_NORMAL; /* is this right? */
+	main_fibre->f_stack = NULL;
 
 	current_fibre = main_fibre;
 }
@@ -348,21 +354,21 @@ void
 fibre_store_destroy(struct fibre_store *store)
 {
 	size_t i;
-	while (store->blocks != NULL) {
-		struct fibre_store_block *next = store->blocks->next;
+	while (store->fs_blocks != NULL) {
+		struct fibre_store_block *next = store->fs_blocks->fsb_next;
 		for (i = 0; i < FIBRE_STORE_NODES_PER_BLOCK; i++) {
-			if (&store->blocks->nodes[i].fibre == main_fibre)
+			if (&store->fs_blocks->fsb_nodes[i].fsn_fibre == main_fibre)
 				continue;
-			if (store->blocks->nodes[i].fibre.stack == NULL)
+			if (store->fs_blocks->fsb_nodes[i].fsn_fibre.f_stack == NULL)
 				continue;
-			deallocate_with(store->alloc,
-				store->blocks->nodes[i].fibre.stack,
-				store->stack_size);
+			deallocate_with(store->fs_alloc,
+				store->fs_blocks->fsb_nodes[i].fsn_fibre.f_stack,
+				store->fs_stack_size);
 		}
-		deallocate_with(store->alloc,
-			store->blocks,
-			sizeof *store->blocks);
-		store->blocks = next;
+		deallocate_with(store->fs_alloc,
+			store->fs_blocks,
+			sizeof *store->fs_blocks);
+		store->fs_blocks = next;
 	}
 }
 
@@ -373,23 +379,22 @@ fibre_finish(void)
 	log_info("fibre", "Deinitialising fibre system\n");
 
 	log_info("fibre",
-		"Fibre stat stack_allocs: %ld\n", fibre_stats.stack_allocs);
+		"Fibre stat stack_allocs: %ld\n", fibre_stats.fstat_stack_allocs);
 	log_info("fibre",
-		"Fibre stat fibre_go_calls: %ld\n", fibre_stats.fibre_go_calls);
+		"Fibre stat fibre_go_calls: %ld\n", fibre_stats.fstat_fibre_go_calls);
 
 	fibre_store_destroy(&global_fibre_store);
 }
 
 void
-fibre_return(int ret)
+fibre_return(void)
 {
-	log_debug("fibre", "Returning from fibre %p with value %d\n",
-	                   (void *)current_fibre, ret);
+	log_debug("fibre", "Returning from fibre %p\n", (void *)current_fibre);
 
 	if (current_fibre != main_fibre) {
-		current_fibre->state = FS_EMPTY;
+		current_fibre->f_state = FS_EMPTY;
 		fibre_store_list_enqueue(
-			&global_fibre_store.lists[FP_NUM_PRIOS],
+			&global_fibre_store.fs_lists[FP_NUM_PRIOS],
 			current_fibre);
 		/* TODO: When we finish with a fibre, we should mark its stack
 		 * as no longer needed.  For now we will deallocate it, but
@@ -405,20 +410,22 @@ fibre_return(int ret)
 		 * Or we need to hardcode the use of the mmap allocator for
 		 * allocating stacks.
 		 */
+#ifdef VINE_USE_VALGRIND
+		VALGRIND_STACK_DEREGISTER(current_fibre->f_valgrind_id);
+#endif
 		fibre_yield();
 		/* unreachable */
 	}
 	while (fibre_yield())
 		;
 	fibre_finish();
-	exit(ret);
 }
 
 static
 void
 fibre_enqueue(struct fibre *fibre)
 {
-	fibre_store_list_enqueue(&global_fibre_store.lists[fibre->prio], fibre);
+	fibre_store_list_enqueue(&global_fibre_store.fs_lists[fibre->f_prio], fibre);
 }
 
 int
@@ -434,19 +441,27 @@ fibre_yield(void)
 		return 0;
 	}
 
-	if (current_fibre->state != FS_EMPTY) {
-		current_fibre->state = FS_READY;
+	if (current_fibre->f_state != FS_EMPTY) {
+		current_fibre->f_state = FS_READY;
 		fibre_enqueue(current_fibre);
 	}
-	fibre->state = FS_ACTIVE;
-	old = &current_fibre->ctx;
-	new = &fibre->ctx;
+	fibre->f_state = FS_ACTIVE;
+	old = &current_fibre->f_ctx;
+	new = &fibre->f_ctx;
 	old_fibre = current_fibre;
 	current_fibre = fibre;
 	log_debug("fibre", "Yielding from fibre %p to fibre %p.\n",
 	                   (void *)old_fibre,
 	                   (void *)current_fibre);
+#ifdef VINE_USE_VALGRIND
+	current_fibre->f_valgrind_id = VALGRIND_STACK_REGISTER(
+		current_fibre->f_stack,
+		current_fibre->f_stack + global_fibre_store.fs_stack_size);
+#endif
 	fibre_switch(old, new);
+#ifdef VINE_USE_VALGRIND
+	VALGRIND_STACK_DEREGISTER(old_fibre->f_valgrind_id);
+#endif
 	return 1;
 }
 
@@ -455,7 +470,7 @@ fibre_yield(void)
 static void
 fibre_stop(void)
 {
-	fibre_return(0);
+	fibre_return();
 }
 
 void
@@ -463,27 +478,30 @@ void
 fibre_go(void (*f)(void))
 {
 	char *stack;
-	size_t size = global_fibre_store.stack_size;
+	size_t size = global_fibre_store.fs_stack_size;
 	struct fibre *fibre = fibre_store_get_first_empty(&global_fibre_store);
 
-	fibre_stats.fibre_go_calls++;
-	if (fibre->stack == NULL) {
-		fibre_stats.stack_allocs++;
-		stack = allocate_with(global_fibre_store.alloc, size);
+	fibre_stats.fstat_fibre_go_calls++;
+	if (fibre->f_stack == NULL) {
+		fibre_stats.fstat_stack_allocs++;
+		stack = allocate_with(global_fibre_store.fs_alloc, size);
 	} else {
-		stack = fibre->stack;
+		stack = fibre->f_stack;
 	}
+#ifdef VINE_USE_VALGRIND
+	fibre->f_valgrind_id = VALGRIND_STACK_REGISTER(stack, stack + size);
+#endif
 
 	*(uint64_t *)&stack[size -  8] = (uint64_t)fibre_stop;
 	*(uint64_t *)&stack[size - 16] = (uint64_t)f;
-	fibre->ctx.rsp = (uint64_t)&stack[size - 16];
+	fibre->f_ctx.fc_rsp = (uint64_t)&stack[size - 16];
 	/* Obviously this doesn't actually work! OBVIOUSLY! We need to use an
 	 * assembly function to put this pointer into rsi before the first call
 	 * to this fibre.
-	 *     fibre->ctx.rsi = (uint64_t)data;
+	 *     fibre->f_ctx.rsi = (uint64_t)data;
 	 */
-	fibre->state = FS_READY;
-	fibre->prio = FP_NORMAL;
-	fibre->stack = stack;
+	fibre->f_state = FS_READY;
+	fibre->f_prio = FP_NORMAL;
+	fibre->f_stack = stack;
 	fibre_enqueue(fibre);
 }

@@ -4,12 +4,12 @@
 #define VINE_ALLOC_H_INCLUDED
 struct alloc;
 struct alloc_vtable {
-	void *(*allocate)(struct alloc *, size_t);
-	void *(*reallocate)(struct alloc *, void *, size_t, size_t);
-	void (*deallocate)(struct alloc *, void *, size_t);
+	void *(*avt_allocate)(struct alloc *, size_t);
+	void *(*avt_reallocate)(struct alloc *, void *, size_t, size_t);
+	void (*avt_deallocate)(struct alloc *, void *, size_t);
 };
 struct alloc {
-	struct alloc_vtable *vtable;
+	struct alloc_vtable *alloc_vtable;
 };
 extern struct alloc sys_alloc;
 extern struct alloc mmap_alloc;
@@ -23,3 +23,6 @@ extern void *reallocarray_with(struct alloc *, void *, size_t, size_t, size_t);
 extern void *try_allocarray_with(struct alloc *, size_t, size_t);
 extern void *try_reallocarray_with(struct alloc *, void *, size_t, size_t, size_t);
 extern void deallocarray_with(struct alloc *, void *, size_t, size_t);
+#ifndef PAGE_SIZE
+#define PAGE_SIZE ((void)"PAGE_SIZE is defined in memory.h")
+#endif

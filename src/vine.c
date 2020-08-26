@@ -1,10 +1,11 @@
-#include <unistd.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
 #include "types.h"
 #include "abort.h"
 #include "printf.h"
@@ -19,11 +20,12 @@
 #include "object.h"
 #include "table.h"
 #include "heapstring.h"
+#include "alloc_slab.h"
 
-#define MAX_FIBRES 128
 #define STACK_SIZE (4 * 1024 * 1024)
 
-static const char *
+static
+const char *
 autism = "I'd just like to interject for a moment.  What you're referring to"
 " as Linux, is in fact, GNU/Linux, or as I've recently taken to calling it, GNU"
 " plus Linux. Linux is not an operating system unto itself, but rather another"
@@ -44,7 +46,8 @@ autism = "I'd just like to interject for a moment.  What you're referring to"
 " whole system is basically GNU with Linux added, or GNU/Linux.  All the"
 " so-called \"Linux\" distributions are really distributions of GNU/Linux.";
 
-static void
+static
+void
 test_hash_string(const char *str, size_t len)
 {
 	u64 hash = fnv1a((const u8 *)str, len);
@@ -56,12 +59,14 @@ test_hash_string(const char *str, size_t len)
 	}
 }
 
-static int
+static
+int
 counter;
 
 #define NDO_PRINT
 
-static void
+static
+void
 test_fibre(void)
 {
 	int i = ++counter;
@@ -76,7 +81,7 @@ test_fibre(void)
 #ifdef DO_PRINT
 	eprintf("Goodbye, %d!\n", i);
 #endif
-	fibre_return(0);
+	fibre_return();
 }
 
 int
@@ -84,7 +89,9 @@ main(void)
 {
 	counter = 0;
 
-	log_set_loglevel(LOG_DEBUG);
+	log_init();
+	log_set_loglevel(LOG_INFO);
+	log_set_system_loglevel("alloc_buf", LOG_DEBUG);
 
 	{
 		size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
@@ -94,30 +101,19 @@ main(void)
 		}
 	}
 
+	test_slab();
+
 	{
 		struct rng rng;
 
-		rng_init_seed(&rng, (u32)(u64)(void *)&rng);
-
-		eprintf("fnv1a:\n");
-		eprintf("0x%08x\n", rand32(&rng));
-		eprintf("0x%08x\n", rand32(&rng));
-		eprintf("0x%08x\n", rand32(&rng));
-		eprintf("0x%08x\n", rand32(&rng));
-		eprintf("0x%08x\n", rand32(&rng));
-	}
-
-	{
-		struct pcgrng rng;
-
-		pcgrng_init(&rng, (u64)(void *)&rng, 0);
+		rng_init(&rng, (u64)(void *)&rng, 0);
 
 		eprintf("pcg:\n");
-		eprintf("0x%08x\n", pcgrng_rand(&rng));
-		eprintf("0x%08x\n", pcgrng_rand(&rng));
-		eprintf("0x%08x\n", pcgrng_rand(&rng));
-		eprintf("0x%08x\n", pcgrng_rand(&rng));
-		eprintf("0x%08x\n", pcgrng_rand(&rng));
+		eprintf("0x%08x\n", rng_rand(&rng));
+		eprintf("0x%08x\n", rng_rand(&rng));
+		eprintf("0x%08x\n", rng_rand(&rng));
+		eprintf("0x%08x\n", rng_rand(&rng));
+		eprintf("0x%08x\n", rng_rand(&rng));
 	}
 
 	{
@@ -168,7 +164,9 @@ main(void)
 		sv_all = string_as_view(&str);
 
 		test_hash_string(str.str_str, str.str_len);
+		eprintf("refcnt before finish: %lu\n", str.str_refcnt);
 		string_finish(&str);
+		eprintf("refcnt after finish: %lu\n", str.str_refcnt);
 
 		test_hash_string(sv->sv_str, sv->sv_len);
 		test_hash_string(sv_all->sv_str, sv_all->sv_len);
@@ -181,10 +179,11 @@ main(void)
 		test_hash_string(data, strlen(data));
 		fibre_init(&mmap_alloc, STACK_SIZE);
 		fibre_go(test_fibre);
-		fibre_return(0);
-		/* test_hash_string(data, strlen(data) - 5); */
+		fibre_return();
+		test_hash_string(data, strlen(data) - 5);
 		/* fibre_finish(); */
 	}
 
+	log_finish();
 	return 0;
 }

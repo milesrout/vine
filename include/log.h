@@ -15,6 +15,8 @@ enum log_level {
 	LOG_INFO,
 	LOG_DEBUG
 };
+extern void log_init(void);
+extern void log_finish(void);
 extern void log_set_loglevel(int level);
 extern void log_set_system_loglevel(const char *system, int level);
 attribute_format_printf(3, 0) extern void vlogf(int level, const char *system, const char *fmt, va_list args);

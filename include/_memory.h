@@ -7,4 +7,7 @@ extern void *reallocate(void *, size_t, size_t);
 extern void *try_allocate(size_t);
 extern void *try_reallocate(void *, size_t, size_t);
 extern void deallocate(void *, size_t);
+#ifdef PAGE_SIZE
+#undef PAGE_SIZE
+#endif
 #define PAGE_SIZE 4096ul

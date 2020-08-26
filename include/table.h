@@ -12,20 +12,20 @@
 #endif
 #define VINE_TABLE_H_INCLUDED
 struct tkey {
-	union object key;
-	u64 hash;
+	union object tk_obj;
+	u64 tk_hash;
 };
 struct tpair {
-	struct tkey key;
-	union object value;
+	struct tkey tkv_key;
+	union object tkv_value;
 };
 struct table {
-	size_t size, capacity;
-	struct tpair *pairs;
-	struct alloc *alloc;
+	size_t t_size, t_capacity;
+	struct tpair *t_pairs;
+	struct alloc *t_alloc;
 };
 extern struct table *table_create(struct alloc *, size_t initial_size);
-extern void table_deinit(struct table *table);
+extern void table_finish(struct table *table);
 extern void table_destroy(struct table *table);
 extern void table_init(struct table *table, struct alloc *alloc, size_t initial_size);
 extern int table_equal(struct table *, struct table *);
@@ -77,8 +77,8 @@ extern struct tkey table_key_int(int);
 extern struct tkey table_key_cstr(const char *);
 extern struct tkey table_key(union object);
 struct table_object {
-	struct object_vtable *vtable;
-	struct table table;
+	struct object_vtable *to_vtable;
+	struct table to_table;
 };
 extern void table_object_init(struct table_object *, struct alloc *, size_t);
 extern void object_init_as_table(union object *, struct alloc *, size_t);

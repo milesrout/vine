@@ -1,23 +1,30 @@
 ifeq ($(BUILD),release)
-	CFLAGS += -O3 -s -DNDEBUG
+	CFLAGS += -O3 -s -DNDEBUG -fno-delete-null-pointer-checks
+else ifeq ($(BUILD),valgrind)
+	CFLAGS += -Og -g -Werror -DVINE_USE_VALGRIND
 else ifeq ($(BUILD),sanitise)
-	CFLAGS += -O0 -g -Werror -fsanitize=address -fsanitize=undefined
+	CFLAGS += -Og -g -Werror -fsanitize=address -fsanitize=undefined
 	LDFLAGS += -lasan -lubsan
 else
-	CFLAGS += -O0 -g -Werror
+	BUILD = debug
+	CFLAGS += -Og -g -Werror
 endif
 
 TARGET    := vine
 
+#PC_DEPS   :=
+#CFLAGS    += $(shell pkg-config --cflags $(PC_DEPS))
+#LDLIBS    += $(shell pkg-config --static --libs $(PC_DEPS))
+
 SRCS      := $(shell find src -name *.c -or -name *.S)
-OBJS      := $(SRCS:%=build/%.o)
+OBJS      := $(SRCS:%=build/$(BUILD)/%.o)
 DEPS      := $(OBJS:%.o=%.d)
 
-INCS      := $(addprefix -I,$(shell find ./include -type d))
+#INCS      := $(addprefix -I,$(shell find ./include -type d))
 INCS      := -I./include
 
 WARNINGS  += -pedantic -pedantic-errors -Wno-overlength-strings
-WARNINGS  += -fmax-errors=1 -Wall -Wextra -Wdouble-promotion -Wformat=2
+WARNINGS  += -fmax-errors=5 -Wall -Wextra -Wdouble-promotion -Wformat=2
 WARNINGS  += -Wformat-signedness -Wvla -Wformat-truncation=2 -Wformat-overflow=2
 WARNINGS  += -Wnull-dereference -Winit-self -Wuninitialized
 WARNINGS  += -Wimplicit-fallthrough=4 -Wstack-protector -Wmissing-include-dirs
@@ -32,24 +39,30 @@ WARNINGS  += -Wsign-conversion -Wpacked -Wdangling-else -Wparentheses
 WARNINGS  += -Wdate-time -Wjump-misses-init
 WARNINGS  += -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes
 WARNINGS  += -Wmissing-declarations -Wnormalized=nfkc -Wredundant-decls
-WARNINGS  += -Wnested-externs 
+WARNINGS  += -Wnested-externs -fanalyzer
 
-CFLAGS    += -D_GNU_SOURCE $(INCS) -MMD -MP -std=c89 $(WARNINGS) -fPIE
-CFLAGS    += -ftrapv -fstack-protector
+CFLAGS    += -D_GNU_SOURCE -D_FORTIFY_SOURCE=2 $(INCS) -MMD -MP -std=c89
+CFLAGS    += -fPIE -ftrapv -fstack-protector $(WARNINGS)
 
 LDFLAGS   += -pie -fPIE
 LDLIBS    += -lm
 
-build/$(TARGET): $(OBJS)
+VALGRIND_FLAGS += -s --show-leak-kinds=all --leak-check=full
+
+.PHONY: $(TARGET)
+$(TARGET): build/$(BUILD)/$(TARGET)
+	ln -sf build/$(BUILD)/$(TARGET) $(TARGET)
+
+build/$(BUILD)/$(TARGET): $(OBJS)
 	$(CC) $(OBJS) -o $@ $(LDFLAGS) $(LDLIBS)
 
-build/%.c.o: %.c
-	mkdir -p $(dir $@)
+build/$(BUILD)/%.c.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) -c $(CFLAGS) $< -o $@
-	@$(RM) *.d
+	@#$(RM) *.d
 
-build/%.S.o: %.S
-	mkdir -p $(dir $@)
+build/$(BUILD)/%.S.o: %.S
+	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
 tags: $(SRCS)
@@ -57,9 +70,13 @@ tags: $(SRCS)
 		sed -e '/^$$/d' -e '/\.o:[ \t]*$$/d' | \
 		ctags -L - $(CTAGS_FLAGS)
 
-.PHONY: clean syntastic
+
+.PHONY: clean cleanall syntastic debug release valgrind sanitise
 clean:
-	rm -f build/$(TARGET) $(OBJS) $(DEPS)
+	$(RM) build/$(TARGET) $(OBJS) $(DEPS)
+
+cleanall: clean
+	$(RM) -r build/{debug,release,valgrind,sanitise}/*
 
 syntastic:
 	echo $(CFLAGS) | tr ' ' '\n' > .syntastic_c_config
@@ -67,4 +84,18 @@ syntastic:
 release:
 	-$(MAKE) "BUILD=release"
 
+valgrind:
+	-$(MAKE) "BUILD=valgrind"
+	valgrind $(VALGRIND_FLAGS) ./build/valgrind/$(TARGET)
+
+sanitise:
+	-$(MAKE) "BUILD=sanitise"
+	./build/sanitise/$(TARGET)
+
+debug:
+	-$(MAKE)
+	./build/debug/$(TARGET)
+
+ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)
+endif

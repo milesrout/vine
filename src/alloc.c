@@ -1,7 +1,8 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "_memory.h"
 
+#include "memory.h"
 #include "alloc.h"
 #include "abort.h"
 #include "checked.h"
@@ -9,7 +10,7 @@
 void *
 allocate_with(struct alloc *alloc, size_t m)
 {
-	void *p = alloc->vtable->allocate(alloc, m);
+	void *p = alloc->alloc_vtable->avt_allocate(alloc, m);
 	if (p == NULL) {
 		abort_with_error("Memory allocation failure\n");
 	}
@@ -20,13 +21,13 @@ allocate_with(struct alloc *alloc, size_t m)
 void *
 try_allocate_with(struct alloc *alloc, size_t m)
 {
-	return alloc->vtable->allocate(alloc, m);
+	return alloc->alloc_vtable->avt_allocate(alloc, m);
 }
 
 void *
 reallocate_with(struct alloc *alloc, void *q, size_t m, size_t n)
 {
-	void *p = alloc->vtable->reallocate(alloc, q, m, n);
+	void *p = alloc->alloc_vtable->avt_reallocate(alloc, q, m, n);
 	if (p == NULL) {
 		abort_with_error("Memory allocation failure\n");
 	}
@@ -37,13 +38,13 @@ reallocate_with(struct alloc *alloc, void *q, size_t m, size_t n)
 void *
 try_reallocate_with(struct alloc *alloc, void *q, size_t m, size_t n)
 {
-	return alloc->vtable->reallocate(alloc, q, m, n);
+	return alloc->alloc_vtable->avt_reallocate(alloc, q, m, n);
 }
 
 void
 deallocate_with(struct alloc *alloc, void *p, size_t m)
 {
-	alloc->vtable->deallocate(alloc, p, m);
+	alloc->alloc_vtable->avt_deallocate(alloc, p, m);
 }
 
 void *

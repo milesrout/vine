@@ -5,23 +5,18 @@
 #error "May not include str.h more than once"
 #endif
 #define VINE_STR_H_INCLUDED
-struct str_node {
-	struct str_node *prev;
-	struct str_node *next;
-};
 struct strview {
-	struct str_node sv_node;
+	struct string  *sv_string;
 	size_t          sv_len;
 	char           *sv_str;
 };
 struct string {
-	struct str_node str_node;
+	size_t          str_refcnt;
 	size_t          str_len;
 	size_t          str_cap;
 	char           *str_str;
 	struct alloc   *str_alloc;
 	struct alloc   *str_viewalloc;
-	int             str_finished;
 };
 extern void string_init(struct string *);
 extern void string_init_with(struct string *, struct alloc *, size_t);

@@ -1,10 +1,10 @@
 #ifndef VINE_ALLOC_H_INCLUDED
 #error "Must include alloc.h before including alloc_buf.h"
 #endif
-#ifdef VINE_BUF_ALLOC_H_INCLUDED
+#ifdef VINE_ALLOC_BUF_H_INCLUDED
 #error "May not include alloc_buf.h more than once"
 #endif
-#define VINE_BUF_ALLOC_H_INCLUDED
+#define VINE_ALLOC_BUF_H_INCLUDED
 struct buf_alloc {
 	struct alloc ba_alloc;
 	char *ba_last;

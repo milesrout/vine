@@ -1,9 +1,9 @@
 #include <stdarg.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include "_memory.h"
 
+#include "_memory.h"
 #include "abort.h"
 #include "alloc.h"
 #include "printf.h"
