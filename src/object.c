@@ -50,7 +50,7 @@ vobject_destroy(struct object_vtable **obj, struct alloc *alloc)
 
 #define DEFINE_VTABLE(name) \
 struct name##_object; \
-static const \
+static \
 struct object_vtable \
 name##_object_vtable = { \
 	&name##_object_typename, \

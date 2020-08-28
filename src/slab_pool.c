@@ -25,47 +25,47 @@ static void destroy_slab(struct slab *);
 static void destroy_slabs(struct slab **);
 
 void
-slab_pool_init(struct slab_pool *sp, size_t align, size_t size,
+slab_pool_init(struct slab_pool *pool, size_t align, size_t size,
 	void (*init)(void *), void (*finish)(void *))
 {
-	sp->sp_align = align;
-	sp->sp_size = size;
-	sp->sp_init = init;
-	sp->sp_finish = finish;
-	sp->sp_slabs = NULL;
+	pool->sp_align = align;
+	pool->sp_size = size;
+	pool->sp_init = init;
+	pool->sp_finish = finish;
+	pool->sp_slabs = NULL;
 }
 
 void
-slab_pool_finish(struct slab_pool *sp)
+slab_pool_finish(struct slab_pool *pool)
 {
-	destroy_slabs(&sp->sp_slabs);
+	destroy_slabs(&pool->sp_slabs);
 }
 
 void *
-slab_object_create(struct slab_pool *sp)
+slab_object_create(struct slab_pool *pool)
 {
 	void *ptr;
-	size_t size = sp->sp_size;
-	size_t align = sp->sp_align;
+	size_t size = pool->sp_size;
+	size_t align = pool->sp_align;
 
-	if (sp->sp_slabs == NULL) {
-		sp->sp_slabs = create_slab(sp->sp_slabs, align);
-		ptr = allocate_with(&sp->sp_slabs->slab_ba.ba_alloc, size);
+	if (pool->sp_slabs == NULL) {
+		pool->sp_slabs = create_slab(pool->sp_slabs, align);
+		ptr = allocate_with(&pool->sp_slabs->slab_ba.ba_alloc, size);
 	} else {
-		ptr = try_allocate_with(&sp->sp_slabs->slab_ba.ba_alloc, size);
+		ptr = try_allocate_with(&pool->sp_slabs->slab_ba.ba_alloc, size);
 		if (ptr == NULL) {
-			sp->sp_slabs = create_slab(sp->sp_slabs, align);
-			ptr = allocate_with(&sp->sp_slabs->slab_ba.ba_alloc, size);
+			pool->sp_slabs = create_slab(pool->sp_slabs, align);
+			ptr = allocate_with(&pool->sp_slabs->slab_ba.ba_alloc, size);
 		} 
 	}
-	sp->sp_init(ptr);
+	pool->sp_init(ptr);
 	return ptr;
 }
 
 void
-slab_object_destroy(struct slab_pool *sp, void *ptr)
+slab_object_destroy(struct slab_pool *pool, void *ptr)
 {
-	sp->sp_finish(ptr);
+	pool->sp_finish(ptr);
 }
 
 static

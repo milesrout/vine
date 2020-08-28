@@ -14,7 +14,8 @@
 #include "alloc.h"
 #include "log.h"
 
-static void *
+static
+void *
 mmap_allocate(struct alloc *a, size_t m)
 {
 	void *p;
@@ -28,7 +29,8 @@ mmap_allocate(struct alloc *a, size_t m)
 	return p;
 }
 
-static void *
+static
+void *
 mmap_reallocate(struct alloc *a, void *q, size_t m, size_t n)
 {
 	void *p = mremap(q, m, n, 0 /* |MREMAP_MAYMOVE */);
@@ -41,7 +43,8 @@ mmap_reallocate(struct alloc *a, void *q, size_t m, size_t n)
 	return p;
 }
 
-static void
+static
+void
 mmap_deallocate(struct alloc *a, void *p, size_t n)
 {
 	int r;

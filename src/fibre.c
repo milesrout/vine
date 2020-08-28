@@ -19,7 +19,8 @@
 
 #include "fibre_switch.h"
 
-static struct {
+static
+struct {
 	long int fstat_stack_allocs;
 	long int fstat_fibre_go_calls;
 } fibre_stats = {0};
@@ -295,9 +296,13 @@ fibre_store_get_next_ready(struct fibre_store *store)
 	return NULL;
 }
 
-static struct fibre *current_fibre;
-static struct fibre *main_fibre;
-static struct fibre_store global_fibre_store;
+static
+struct fibre
+*current_fibre, *main_fibre;
+
+static
+struct fibre_store
+global_fibre_store;
 
 
 void
@@ -342,6 +347,7 @@ fibre_init(struct alloc *alloc, size_t stack_size)
 	main_fibre = fibre_store_get_first_empty(&global_fibre_store);
 	main_fibre->f_state = FS_ACTIVE;
 	main_fibre->f_prio = FP_NORMAL; /* is this right? */
+	main_fibre->f_valgrind_id = 0; /* see valgrind/m_stacks.c/next_id */
 	main_fibre->f_stack = NULL;
 
 	current_fibre = main_fibre;
@@ -454,13 +460,17 @@ fibre_yield(void)
 	                   (void *)old_fibre,
 	                   (void *)current_fibre);
 #ifdef VINE_USE_VALGRIND
-	current_fibre->f_valgrind_id = VALGRIND_STACK_REGISTER(
-		current_fibre->f_stack,
-		current_fibre->f_stack + global_fibre_store.fs_stack_size);
+	if (current_fibre != main_fibre) {
+		current_fibre->f_valgrind_id = VALGRIND_STACK_REGISTER(
+			current_fibre->f_stack,
+			current_fibre->f_stack + global_fibre_store.fs_stack_size);
+	}
 #endif
 	fibre_switch(old, new);
 #ifdef VINE_USE_VALGRIND
-	VALGRIND_STACK_DEREGISTER(old_fibre->f_valgrind_id);
+	if (old_fibre != main_fibre) {
+		VALGRIND_STACK_DEREGISTER(old_fibre->f_valgrind_id);
+	}
 #endif
 	return 1;
 }

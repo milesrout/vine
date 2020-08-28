@@ -13,7 +13,7 @@
 #include "memory.h"
 #include "alloc.h"
 #include "alloc_buf.h"
-#include "alloc_slab.h"
+#include "slab_pool.h"
 #include "str.h"
 #include "hash.h"
 #include "fibre.h"
@@ -21,6 +21,8 @@
 #include "object.h"
 #include "table.h"
 #include "heapstring.h"
+#include "splay.h"
+#include "text.h"
 
 #define STACK_SIZE (4 * 1024 * 1024)
 
@@ -86,6 +88,27 @@ test_fibre(void)
 
 static void test_slab(void);
 
+static
+void
+print_splay_tree(struct splay *t)
+{
+	eprintf("in:  "); print_splay_tree_inorder(t); eprintf("\n");
+	eprintf("pre: "); print_splay_tree_preorder(t); eprintf("\n\n");
+}
+
+static
+void
+test_splay(void)
+{
+	struct splay *t = NULL;
+	unsigned i = 10;
+	for (; i != 0; i--) {
+		t = splay_insert(t, &sys_alloc, (i * 1521321) % 256, NULL);
+		print_splay_tree(t);
+	}
+	splay_delete(t, &sys_alloc);
+}
+
 int
 main(void)
 {
@@ -103,6 +126,8 @@ main(void)
 	}
 
 	test_slab();
+	(void)test_splay;
+	test_text();
 
 	{
 		struct rng rng;
@@ -203,37 +228,38 @@ static
 void
 foo_init(void *foo)
 {
+	struct foo *f = (struct foo *)foo;
 	eprintf("foo_init %p\n", foo);
-	string_init((struct string *)foo);
-	eprintf("foo_init %d\n", *(int*)foo);
+	string_init(&f->str);
 }
 
 static
 void
 foo_finish(void *foo)
 {
+	struct foo *f = (struct foo *)foo;
 	eprintf("foo_finish %p\n", foo);
-	string_finish((struct string *)foo);
+	string_finish(&f->str);
 }
 
 static
 void
 test_slab(void)
 {
-	struct slab_alloc sa;
+	struct slab_pool sp;
 	struct foo *f[3];
 
-	slab_alloc_init(&sa, FOO_ALIGN, FOO_SIZE, &foo_init, &foo_finish);
+	slab_pool_init(&sp, FOO_ALIGN, FOO_SIZE, &foo_init, &foo_finish);
 
 	eprintf("FOO_ALIGN=%lu\n", FOO_ALIGN);
 	eprintf("FOO_SIZE=%lu\n", FOO_SIZE);
 
-	f[0] = slab_object_create(&sa);
-	f[1] = slab_object_create(&sa);
-	f[2] = slab_object_create(&sa);
-	slab_object_destroy(&sa, f[0]);
-	slab_object_destroy(&sa, f[1]);
-	slab_object_destroy(&sa, f[2]);
+	f[0] = slab_object_create(&sp);
+	f[1] = slab_object_create(&sp);
+	f[2] = slab_object_create(&sp);
+	slab_object_destroy(&sp, f[0]);
+	slab_object_destroy(&sp, f[1]);
+	slab_object_destroy(&sp, f[2]);
 
-	slab_alloc_finish(&sa);
+	slab_pool_finish(&sp);
 }

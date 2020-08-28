@@ -1,5 +1,6 @@
 #include "abort.h"
 
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,4 +21,10 @@ abort_with_error(const char *fmt, ...)
 	va_end(args);
 
 	abort();
+}
+
+void
+breakpoint(void)
+{
+	raise(SIGTRAP);
 }

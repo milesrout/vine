@@ -7,7 +7,7 @@ else ifeq ($(BUILD),sanitise)
 	LDFLAGS += -lasan -lubsan
 else
 	BUILD = debug
-	CFLAGS += -Og -g -Werror
+	CFLAGS += -O0 -g -Werror
 endif
 
 TARGET    := vine
@@ -41,7 +41,7 @@ WARNINGS  += -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes
 WARNINGS  += -Wmissing-declarations -Wnormalized=nfkc -Wredundant-decls
 WARNINGS  += -Wnested-externs -fanalyzer
 
-CFLAGS    += -D_GNU_SOURCE -D_FORTIFY_SOURCE=2 $(INCS) -MMD -MP -std=c89
+CFLAGS    += -D_GNU_SOURCE -D_FORTIFY_SOURCE=0 $(INCS) -MMD -MP -std=c89
 CFLAGS    += -fPIE -ftrapv -fstack-protector $(WARNINGS)
 
 LDFLAGS   += -pie -fPIE

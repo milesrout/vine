@@ -21,19 +21,6 @@ representation if at all possible.  It should be unusual for a third-party API
 to force us to deal with mutable char* strings in-place, though, so they
 shouldn't be very common.
 
-Next we have fixed-length, length-prefixed, heap-allocated strings: 'struct
-string *' and its friends.  These should nearly always be immutable, because
-there aren't many useful string operations that are length-preserving (in
-a Unicode world even substituting one character for another is not
-length-preserving), and they cannot be resized in place.
-
-We also have strings in the style of C++'s 'std::string', consisting of a
-length and a pointer to a heap-allocated array of characters that can be
-reallocated when the array needs to be resized.
-
-Then there are ropes.  Ropes are most suitable for very large strings that have
-to change a lot.
-
 struct heapstring *: heap-allocated string using a flexible array member. the
 create/expand/destroy functions take an allocator, but do not store or remember
 the allocator, so the caller must remember it. they do store and remember their
