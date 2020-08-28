@@ -13,6 +13,7 @@
 #include "memory.h"
 #include "alloc.h"
 #include "alloc_buf.h"
+#include "alloc_slab.h"
 #include "str.h"
 #include "hash.h"
 #include "fibre.h"
@@ -20,7 +21,6 @@
 #include "object.h"
 #include "table.h"
 #include "heapstring.h"
-#include "alloc_slab.h"
 
 #define STACK_SIZE (4 * 1024 * 1024)
 
@@ -84,21 +84,22 @@ test_fibre(void)
 	fibre_return();
 }
 
+static void test_slab(void);
+
 int
 main(void)
 {
+	size_t page_size;
 	counter = 0;
 
 	log_init();
 	log_set_loglevel(LOG_INFO);
 	log_set_system_loglevel("alloc_buf", LOG_DEBUG);
 
-	{
-		size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
-		if (page_size != PAGE_SIZE) {
-			abort_with_error("Page size must be %lu, but is %lu\n",
-				PAGE_SIZE, page_size);
-		}
+	page_size = (size_t)sysconf(_SC_PAGESIZE);
+	if (page_size != PAGE_SIZE) {
+		abort_with_error("Page size must be %lu, but is %lu\n",
+			PAGE_SIZE, page_size);
 	}
 
 	test_slab();
@@ -186,4 +187,53 @@ main(void)
 
 	log_finish();
 	return 0;
+}
+
+#define FOO_ALIGN __alignof__(struct foo)
+#define FOO_SIZE sizeof(struct foo)
+
+struct foo {
+	struct string str;
+	char x;
+	size_t y;
+	char z;
+};
+
+static
+void
+foo_init(void *foo)
+{
+	eprintf("foo_init %p\n", foo);
+	string_init((struct string *)foo);
+	eprintf("foo_init %d\n", *(int*)foo);
+}
+
+static
+void
+foo_finish(void *foo)
+{
+	eprintf("foo_finish %p\n", foo);
+	string_finish((struct string *)foo);
+}
+
+static
+void
+test_slab(void)
+{
+	struct slab_alloc sa;
+	struct foo *f[3];
+
+	slab_alloc_init(&sa, FOO_ALIGN, FOO_SIZE, &foo_init, &foo_finish);
+
+	eprintf("FOO_ALIGN=%lu\n", FOO_ALIGN);
+	eprintf("FOO_SIZE=%lu\n", FOO_SIZE);
+
+	f[0] = slab_object_create(&sa);
+	f[1] = slab_object_create(&sa);
+	f[2] = slab_object_create(&sa);
+	slab_object_destroy(&sa, f[0]);
+	slab_object_destroy(&sa, f[1]);
+	slab_object_destroy(&sa, f[2]);
+
+	slab_alloc_finish(&sa);
 }
