@@ -1,0 +1,51 @@
+		So how then does the editing of text occur?
+
+As might be obvious, the representation of text in a text editor is of the
+utmost importance.  Vine uses what is called a 'piece chain' to store text.
+
+		What is a piece chain?
+
+At its simplest, a piece chain is a doubly linked list of 'pieces'.  A piece
+is a pointer into a buffer and a length.
+
+{buf: 'abcdefghijkl'}
+{new: ''}
+
+<text initially 'abcdefghijkl'>
+
+tc_numpieces: 3
+tc_pieces: [[buf,12)]
+tc_current: 0
+{new: ''}
+
+<insert 'ABC' in middle>
+<text is now 'abcdefABCghijkl'>
+
+tc_numpieces: 6
+tc_pieces: [[buf,12), [buf,6), [newbuf,3), [buf+6,6)]
+tc_current: 1->2->3
+{new: 'ABC'}
+
+<insert 'DEF' in first quarter>
+<text is now 'abcDEFdefABCgihjkl'>
+
+tc_numpieces: 6
+tc_pieces: [[buf,12), [buf,6), [newbuf,3), [buf+6,6), [buf,3), [newbuf+3,3), [buf+3,3)]
+            'ab...l'  'abcdef' 'ABC'       'ghijkl'   'abc'    'DEF'         'def'
+tc_current: 5->6->7->2->3
+{new: 'ABCDEF'}
+
+		Insert within an existing piece
+
+Create three new pieces.  The first should be everything up to the cursor
+position of the current piece.  The second should contain the newly inserted
+character.  The third should be everything after the cursor position in the
+current piece.  The old piece in the list should be substitued for
+first->second->third.
+
+		Insert at the boundary of two existing pieces
+
+Create one new piece.  It should contain the newly inserted character.
+before->new->after should be substituted in place of before->after in the list.
+
+		Delete a character
