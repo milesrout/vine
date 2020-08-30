@@ -21,7 +21,6 @@
 #include "object.h"
 #include "table.h"
 #include "heapstring.h"
-#include "splay.h"
 #include "text.h"
 
 #define STACK_SIZE (4 * 1024 * 1024)
@@ -88,27 +87,6 @@ test_fibre(void)
 
 static void test_slab(void);
 
-static
-void
-print_splay_tree(struct splay *t)
-{
-	eprintf("in:  "); print_splay_tree_inorder(t); eprintf("\n");
-	eprintf("pre: "); print_splay_tree_preorder(t); eprintf("\n\n");
-}
-
-static
-void
-test_splay(void)
-{
-	struct splay *t = NULL;
-	unsigned i = 10;
-	for (; i != 0; i--) {
-		t = splay_insert(t, &sys_alloc, (i * 1521321) % 256, NULL);
-		print_splay_tree(t);
-	}
-	splay_delete(t, &sys_alloc);
-}
-
 int
 main(void)
 {
@@ -126,7 +104,6 @@ main(void)
 	}
 
 	test_slab();
-	(void)test_splay;
 	test_text();
 
 	{
