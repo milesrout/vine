@@ -8,6 +8,7 @@
 
 #include "abort.h"
 #include "alloc.h"
+#include "checked.h"
 #include "types.h"
 #include "printf.h"
 #include "memory.h"
@@ -31,6 +32,7 @@ text_init(struct text *tx, struct alloc *alloc, char *buf, size_t len)
 {
 	tx->tx_alloc = alloc;
 
+	/* this needs to be a linked list, right? */
 	tx->tx_pieces = allocarray_with(alloc, sizeof(struct text_piece), 1);
 	tx->tx_pieces[0].txp_buf = buf;
 	tx->tx_pieces[0].txp_len = len;
@@ -50,6 +52,7 @@ text_init(struct text *tx, struct alloc *alloc, char *buf, size_t len)
 	tx->tx_orig_buf = buf;
 	tx->tx_orig_buf_len = len;
 
+	/* this needs to be a linked list */
 	tx->tx_append_buf = allocate_with(&mmap_alloc, PAGE_SIZE);
 	tx->tx_append_buf_len = 0;
 	tx->tx_append_buf_cap = PAGE_SIZE;
@@ -105,7 +108,6 @@ test_text(void)
 		if (insert) {
 			if ('A' <= c && c <= 'Z') {
 				struct text_node *n = get_active_piece(&tx, cursor);
-				/*eprintf("[%.*s]\n", (int)n->txn_piece->txp_len, n->txn_piece->txp_buf);*/
 				tx.tx_append_buf[tx.tx_append_buf_len++] = (char)c;
 				n->txn_piece->txp_len++;
 				cursor++;
@@ -113,6 +115,9 @@ test_text(void)
 			} else {
 				/* commit active piece */
 				tx.tx_active_piece = NULL;
+				tx.tx_append_buf[tx.tx_append_buf_len++] = '\0';
+				if (tx.tx_append_buf_len > 20)
+					breakpoint();
 				insert = 0;
 			}
 		} else {
@@ -170,19 +175,17 @@ text_tree_split(struct text *tx, size_t cursor)
 	/* because n is the root, its 'left size' is the size of all the text
 	 * on the left of this node i.e. the offset of the text in this node
 	 * from the beginning of the document */
-	size_t left_edge = n->txn_left_size;
+	size_t left_edge_pos = n->txn_left_size;
 
 	/* same logic */
-	size_t right_edge = n->txn_left_size + n->txn_piece->txp_len;
+	size_t right_edge_pos = n->txn_left_size + n->txn_piece->txp_len;
 
 	/* we always need to create a new blank and editable text piece */
-	struct text_node *P;
+	struct text_node *P = allocate_with(tx->tx_alloc, sizeof(struct text_node));
 	struct text_piece *p = uninit_text_piece(tx);
 	p->txp_buf = tx->tx_append_buf + tx->tx_append_buf_len;
 	p->txp_len = 0;
 
-	/* we always need to create a node for said piece */
-	P = allocate_with(tx->tx_alloc, sizeof(struct text_node));
 	/* it is zero-initialised by allocate_with and as such it should not be
 	 * necessary to initialise things to NULL/0 */
 	P->txn_parent = NULL;
@@ -200,14 +203,16 @@ text_tree_split(struct text *tx, size_t cursor)
 	 * it means that even when we are at the 'beginning' we're still
 	 * between two nodes and only need to consider one of these two cases.
 	 * c'est la vie. */
-	if (cursor == left_edge) {
+	if (cursor == left_edge_pos) {
 		/* the cursor points directly before n.  we want to insert the
 		 * new node directly before n. */
 		text_tree_insert_before(&tx->tx_tree, P);
-	} else if (cursor == right_edge) {
+	} else if (cursor == right_edge_pos) {
 		/* the cursor points directly after n.  we want to insert the
 		 * new node directly after n. */
 		text_tree_insert_after(&tx->tx_tree, P);
+	} else if (cursor < left_edge_pos || cursor > right_edge_pos) {
+		breakpoint();
 	} else {
 		/* the trickier case.  the cursor points within n.  we want to
 		 * create two new nodes corresponding to everything in
@@ -222,13 +227,7 @@ text_tree_split(struct text *tx, size_t cursor)
 		struct text_node *R = allocate_with(tx->tx_alloc, sizeof(struct text_node));
 
 		/* how far into the node the cursor is */
-		size_t offset = cursor - left_edge;
-		/* cursor = 7
-		 * left_edge = 0
-		 * offset = 7
-		 * l->len = 7
-		 * r->len = 13 - 7 = 6
-		 */
+		size_t offset = cursor - left_edge_pos;
 
 		l->txp_buf = n->txn_piece->txp_buf;
 		l->txp_len = offset;
@@ -249,8 +248,6 @@ text_tree_split(struct text *tx, size_t cursor)
 		L->txn_parent = P;
 		R->txn_parent = P;
 
-		/*breakpoint();*/
-
 		text_tree_replace(&tx->tx_tree, P);
 	}
 }
@@ -270,8 +267,10 @@ text_tree_insert_before(struct text_tree *tree, struct text_node *new)
 	root->txn_left = NULL;
 	root->txn_left_size = 0;
 
-	new->txn_left->txn_parent = new;
-	new->txn_right->txn_parent = new;
+	if (new->txn_left)
+		new->txn_left->txn_parent = new;
+	if (new->txn_right)
+		new->txn_right->txn_parent = new;
 
 	tree->txt_root = new;
 }
@@ -292,8 +291,10 @@ text_tree_insert_after(struct text_tree *tree, struct text_node *new)
 	root->txn_right = NULL;
 	root->txn_right_size = 0;
 
-	new->txn_left->txn_parent = new;
-	new->txn_right->txn_parent = new;
+	if (new->txn_left)
+		new->txn_left->txn_parent = new;
+	if (new->txn_right)
+		new->txn_right->txn_parent = new;
 
 	tree->txt_root = new;
 }
@@ -338,10 +339,6 @@ text_tree_get(struct text_tree *tree, size_t cursor)
 	return tree->txt_root;
 }
 
-/* Returns the amount that the node is offset by having 'right' connections in
- * the path from the root down to it.
- */
-/*
 static
 size_t
 parental_left_offset(struct text_node *n)
@@ -378,41 +375,13 @@ right_edge(struct text_node *n)
 
 static
 size_t
-left_edge_root(struct text_node *n)
+calc_size(struct text_node *n)
 {
-	return n->txn_left_size;
-}
-
-static
-size_t
-left_edge_leftroot(struct text_node *n)
-{
-	return n->txn_left_size;
-}
-*/
-
-static
-size_t
-right_edge_root(struct text_node *n)
-{
-	breakpoint();
-	return n->txn_left_size + n->txn_piece->txp_len;
-}
-
-static
-size_t
-left_edge_rightroot(struct text_node *n)
-{
-	breakpoint();
-	return right_edge_root(n->txn_parent) + n->txn_left_size;
-}
-
-static
-size_t
-right_edge_rightroot(struct text_node *n)
-{
-	breakpoint();
-	return left_edge_rightroot(n) + n->txn_piece->txp_len;
+	if (n == NULL)
+		return 0;
+	return add_sz(
+		add_sz(n->txn_piece->txp_len, n->txn_left_size),
+		n->txn_right_size);
 }
 
 static
@@ -422,8 +391,6 @@ do_splay(struct text_tree *tree, size_t cursor)
 	struct text_node *t = tree->txt_root;
 	struct text_node n, *l, *r, *y;
 
-	/*breakpoint();*/
-
 	if (t == NULL)
 		return;
 
@@ -432,10 +399,14 @@ do_splay(struct text_tree *tree, size_t cursor)
 	l = r = &n;
 
 	for (;;) {
-		if (cursor < t->txn_left_size) {
+		/* we cannot assume that t is always the root: sometimes it
+		 * isn't, sometimes it's the left or right child of the last
+		 * thing that was t */
+		size_t le = left_edge(t);
+		if (cursor <= le && !(cursor == 0 && le == 0)) {
 			if (t->txn_left == NULL)
 				break;
-			if (cursor < t->txn_left->txn_left_size) {
+			if (cursor <= left_edge(t->txn_left)) {
 				y = t->txn_left;
 				t->txn_left = y->txn_right;
 				t->txn_left_size = y->txn_right_size;
@@ -449,14 +420,14 @@ do_splay(struct text_tree *tree, size_t cursor)
 					break;
 			}
 			r->txn_left = t;
-			r->txn_left_size = t->txn_left_size + t->txn_piece->txp_len + t->txn_right_size;
+			r->txn_left_size = calc_size(t);
 			r = t;
-			t = t->txn_left;
 			t->txn_parent = NULL;
-		} else if (cursor > right_edge_root(t)) {
+			t = t->txn_left;
+		} else if (cursor > right_edge(t)) {
 			if (t->txn_right == NULL)
 				break;
-			if (cursor > right_edge_rightroot(t->txn_right)) {
+			if (cursor > right_edge(t->txn_right)) {
 				y = t->txn_right;
 				t->txn_right = y->txn_left;
 				t->txn_right_size = y->txn_left_size;
@@ -470,10 +441,10 @@ do_splay(struct text_tree *tree, size_t cursor)
 					break;
 			}
 			l->txn_right = t;
-			l->txn_right_size = t->txn_left_size + t->txn_piece->txp_len + t->txn_right_size; /* THIS? */
+			l->txn_right_size = calc_size(t);
 			l = t;
-			t = t->txn_right;
 			t->txn_parent = NULL;
+			t = t->txn_right;
 		} else break;
 	}
 
@@ -482,12 +453,30 @@ do_splay(struct text_tree *tree, size_t cursor)
 	r->txn_left = t->txn_right;
 	r->txn_left_size = t->txn_right_size;
 
+	{
+		size_t left_total = t->txn_piece->txp_len + t->txn_left_size;
+		size_t right_total = t->txn_piece->txp_len + t->txn_right_size;
+		y = &n;
+		while (y != r) {
+			y->txn_left_size -= right_total;
+			y = y->txn_left;
+		}
+		y = &n;
+		while (y != l) {
+			y->txn_right_size -= left_total;
+			y = y->txn_right;
+		}
+	}
+
 	t->txn_left = n.txn_right;
-	/*t->txn_left_size = n.txn_right_size;*/
 	t->txn_right = n.txn_left;
-	/*t->txn_right_size = n.txn_left_size;*/
-	t->txn_left_size = (t->txn_left == NULL) ? 0 : t->txn_left->txn_left_size + t->txn_left->txn_piece->txp_len + t->txn_left->txn_right_size;
-	t->txn_right_size = (t->txn_right == NULL) ? 0 : t->txn_right->txn_left_size + t->txn_right->txn_piece->txp_len + t->txn_right->txn_right_size;
+	t->txn_left_size = calc_size(t->txn_left);
+	t->txn_right_size = calc_size(t->txn_right);
+
+	if (t->txn_left)
+		t->txn_left->txn_parent = t;
+	if (t->txn_right)
+		t->txn_right->txn_parent = t;
 
 	t->txn_parent = NULL;
 	tree->txt_root = t;
@@ -519,21 +508,14 @@ print_text_tree_inorder(struct text_node *t, size_t cursor, size_t parent)
 	if (t == NULL)
 		return;
 
-	if (t->txn_right == t)
-		breakpoint();
-	if (t->txn_left == t)
-		breakpoint();
-
-	eprintf("(");
 	print_text_tree_inorder(t->txn_left, cursor, parent);
 
 	start = parent + t->txn_left_size;
 	len = t->txn_piece->txp_len;
 	end = start + len;
 
-	if (cursor >= start && cursor < end) {
+	if (cursor > start && cursor <= end) {
 		size_t offset = cursor - start;
-		/*eprintf("~[%lu,%lu,%lu,%lu,%lu]~", start, end, offset, len, cursor);*/
 		eprintf("%.*s", (int)(offset), t->txn_piece->txp_buf);
 		eprintf("|");
 		eprintf("%.*s", (int)(len - offset), t->txn_piece->txp_buf + offset);
@@ -542,6 +524,4 @@ print_text_tree_inorder(struct text_node *t, size_t cursor, size_t parent)
 	}
 
 	print_text_tree_inorder(t->txn_right, cursor, end);
-	eprintf(")");
-
 }

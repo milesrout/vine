@@ -339,7 +339,7 @@ fibre_init(struct alloc *alloc, size_t stack_size)
 	global_fibre_store.fs_alloc = alloc;
 	global_fibre_store.fs_blocks = NULL;
 
-	/* not a bug: "<=" because there is one more list than priorities */
+	/* not a bug: "<=" because there is one more list than priority */
 	for (i = 0; i <= FP_NUM_PRIOS; i++) {
 		fibre_store_list_init(&global_fibre_store.fs_lists[i]);
 	}

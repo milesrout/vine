@@ -1,13 +1,15 @@
 ifeq ($(BUILD),release)
-	CFLAGS += -O3 -s -DNDEBUG -fno-delete-null-pointer-checks
+	CFLAGS += -O3 -s -D_FORTIFY_SOURCE=2 -DNDEBUG -fno-delete-null-pointer-checks
 else ifeq ($(BUILD),valgrind)
 	CFLAGS += -Og -g -Werror -DVINE_USE_VALGRIND
 else ifeq ($(BUILD),sanitise)
 	CFLAGS += -Og -g -Werror -fsanitize=address -fsanitize=undefined
 	LDFLAGS += -lasan -lubsan
+else ifeq ($(BUILD),gdb)
+	CFLAGS += -O0 -g -Werror
 else
 	BUILD = debug
-	CFLAGS += -O0 -g -Werror
+	CFLAGS += -Og -g -Werror
 endif
 
 TARGET    := vine
@@ -41,8 +43,8 @@ WARNINGS  += -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes
 WARNINGS  += -Wmissing-declarations -Wnormalized=nfkc -Wredundant-decls
 WARNINGS  += -Wnested-externs -fanalyzer
 
-CFLAGS    += -D_GNU_SOURCE -D_FORTIFY_SOURCE=0 $(INCS) -MMD -MP -std=c89
-CFLAGS    += -fPIE -ftrapv -fstack-protector $(WARNINGS)
+CFLAGS    += -D_GNU_SOURCE $(INCS) -MMD -MP -std=c89
+CFLAGS    += -fPIE -ftrapv -fstack-protector #$(WARNINGS)
 
 LDFLAGS   += -pie -fPIE
 LDLIBS    += -lm
@@ -59,7 +61,6 @@ build/$(BUILD)/$(TARGET): $(OBJS)
 build/$(BUILD)/%.c.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) -c $(CFLAGS) $< -o $@
-	@#$(RM) *.d
 
 build/$(BUILD)/%.S.o: %.S
 	@mkdir -p $(dir $@)
@@ -76,13 +77,14 @@ clean:
 	$(RM) build/$(TARGET) $(OBJS) $(DEPS)
 
 cleanall: clean
-	$(RM) -r build/{debug,release,valgrind,sanitise}/*
+	$(RM) -r build/{debug,release,valgrind,sanitise,gdb}/*
 
 syntastic:
 	echo $(CFLAGS) | tr ' ' '\n' > .syntastic_c_config
 
 release:
 	-$(MAKE) "BUILD=release"
+	./build/release/$(TARGET)
 
 valgrind:
 	-$(MAKE) "BUILD=valgrind"
@@ -91,6 +93,10 @@ valgrind:
 sanitise:
 	-$(MAKE) "BUILD=sanitise"
 	./build/sanitise/$(TARGET)
+
+gdb:
+	-$(MAKE) "BUILD=gdb"
+	gdb ./build/gdb/$(TARGET)
 
 debug:
 	-$(MAKE)
