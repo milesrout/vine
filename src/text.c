@@ -19,13 +19,11 @@ static void text_tree_finish(struct text_tree *);
 static void text_tree_insert_before(struct text_tree *, struct text_node *);
 static void text_tree_insert_after(struct text_tree *, struct text_node *);
 static void text_tree_replace(struct text_tree *, struct text_node *);
-static struct text_node *text_tree_get(struct text_tree *, size_t);
-/*
-static struct text_node *text_tree_remove(struct text_tree *, size_t);
-*/
 static void text_tree_split(struct text *, size_t);
+static struct text_node *text_tree_get(struct text_tree *, size_t);
 static struct text_node *get_active_piece(struct text *, size_t);
 static void do_splay(struct text_tree *, size_t);
+static void print_text_tree_inorder(struct text_node *, size_t, size_t);
 
 void
 text_init(struct text *tx, struct alloc *alloc, char *buf, size_t len)
@@ -82,8 +80,6 @@ uninit_text_piece(struct text *tx)
 
 	return tx->tx_pieces + tx->tx_pieces_len++;
 }
-
-static void print_text_tree_inorder(struct text_node *, size_t, size_t);
 
 void
 test_text(void)
@@ -320,16 +316,6 @@ text_tree_replace(struct text_tree *tree, struct text_node *new)
 
 	tree->txt_root = new;
 }
-
-/*
-static
-struct text_node *
-text_tree_remove(struct text_tree *tree, size_t cursor)
-{
-	(void)tree; (void)cursor;
-	return NULL;
-}
-i*/
 
 static
 struct text_node *
