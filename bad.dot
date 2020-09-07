@@ -1,0 +1,38 @@
+digraph vine {
+        graph [ordering="out"];
+        ratio = fill;
+        node [style="filled"];
+        "0x7ffff7fc2360" [label="9056:U",color="crimson"];
+        "0x7ffff7fc2360" -> "0x7ffff7fc2060";
+        "0x7ffff7fc2060" [label="8288:X",color="cornflowerblue"];
+        "0x7ffff7fc2060" -> "0x7ffff7fc2360" [style="dotted"];
+        "0x7ffff7fc2360" -> "0x7ffff7fc2300";
+        "0x7ffff7fc2300" [label="8960:o, wor",color="cornflowerblue"];
+        "0x7ffff7fc2300" -> "0x7ffff7fc2270";
+        "0x7ffff7fc2270" [label="8816:l",color="cornflowerblue"];
+        "0x7ffff7fc2270" -> "0x7ffff7fc21e0";
+        "0x7ffff7fc21e0" [label="8672:l",color="cornflowerblue"];
+        "0x7ffff7fc21e0" -> "0x7ffff7fc2150";
+        "0x7ffff7fc2150" [label="8528:e",color="cornflowerblue"];
+        "0x7ffff7fc2150" -> "0x7ffff7fc20c0";
+        "0x7ffff7fc20c0" [label="8384:h",color="cornflowerblue"];
+        "0x7ffff7fc20c0" -> "0x7ffff7fc2090";
+        "0x7ffff7fc2090" [label="8336:X",color="cornflowerblue"];
+        "0x7ffff7fc2090" -> "0x7ffff7fc20c0" [style="dotted"];
+        "0x7ffff7fc2150" -> "0x7ffff7fc2120";
+        "0x7ffff7fc2120" [label="8480:X",color="cornflowerblue"];
+        "0x7ffff7fc2120" -> "0x7ffff7fc2150" [style="dotted"];
+        "0x7ffff7fc21e0" -> "0x7ffff7fc21b0";
+        "0x7ffff7fc21b0" [label="8624:X",color="cornflowerblue"];
+        "0x7ffff7fc21b0" -> "0x7ffff7fc21e0" [style="dotted"];
+        "0x7ffff7fc2270" -> "0x7ffff7fc2240";
+        "0x7ffff7fc2240" [label="8768:X",color="cornflowerblue"];
+        "0x7ffff7fc2240" -> "0x7ffff7fc2270" [style="dotted"];
+        "0x7ffff7fc2300" -> "0x7ffff7fc22d0";
+        "0x7ffff7fc22d0" [label="8912:X",color="cornflowerblue"];
+        "0x7ffff7fc22d0" -> "0x7ffff7fc2330";
+        "0x7ffff7fc2330" [label="9008:ld!",color="cornflowerblue"];
+        "0x7ffff7fc2330" -> "0x7ffff7fc22d0" [style="dotted"];
+        "0x7ffff7fc22d0" -> "0x7ffff7fc2300" [style="dotted"];
+        "0x7ffff7fc2300" -> "0x7ffff7fc2360" [style="dotted"];
+}

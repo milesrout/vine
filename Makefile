@@ -26,7 +26,7 @@ DEPS      := $(OBJS:%.o=%.d)
 INCS      := -I./include
 
 WARNINGS  += -pedantic -pedantic-errors -Wno-overlength-strings
-WARNINGS  += -fmax-errors=5 -Wall -Wextra -Wdouble-promotion -Wformat=2
+WARNINGS  += -fmax-errors=2 -Wall -Wextra -Wdouble-promotion -Wformat=2
 WARNINGS  += -Wformat-signedness -Wvla -Wformat-truncation=2 -Wformat-overflow=2
 WARNINGS  += -Wnull-dereference -Winit-self -Wuninitialized
 WARNINGS  += -Wimplicit-fallthrough=4 -Wstack-protector -Wmissing-include-dirs

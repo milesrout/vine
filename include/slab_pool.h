@@ -15,12 +15,13 @@ struct slab {
 };
 #define SLAB_HEADER_SIZE (sizeof(struct slab) - 1)
 struct slab_pool {
-	size_t sp_align, sp_size;
-	void (*sp_init)(void *ptr);
-	void (*sp_finish)(void *ptr);
+	size_t sp_align;
+	size_t sp_size;
+	void (*sp_init)(void *obj, void *data);
+	void (*sp_finish)(void *obj);
 	struct slab *sp_slabs;
 };
-extern void slab_pool_init(struct slab_pool *, size_t, size_t, void (*)(void *), void (*)(void *));
-extern void slab_pool_finish(struct slab_pool *);
-extern void *slab_object_create(struct slab_pool *);
-extern void slab_object_destroy(struct slab_pool *, void *);
+extern void  slab_pool_init(struct slab_pool *, size_t, size_t, void (*)(void *, void *), void (*)(void *));
+extern void  slab_pool_finish(struct slab_pool *);
+extern void *slab_object_create(struct slab_pool *, void *data);
+extern void  slab_object_destroy(struct slab_pool *, void *);

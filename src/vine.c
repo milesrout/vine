@@ -203,11 +203,12 @@ struct foo {
 
 static
 void
-foo_init(void *foo)
+foo_init(void *foo, void *data)
 {
 	struct foo *f = (struct foo *)foo;
 	eprintf("foo_init %p\n", foo);
 	string_init(&f->str);
+	(void)data;
 }
 
 static
@@ -231,9 +232,9 @@ test_slab(void)
 	eprintf("FOO_ALIGN=%lu\n", FOO_ALIGN);
 	eprintf("FOO_SIZE=%lu\n", FOO_SIZE);
 
-	f[0] = slab_object_create(&sp);
-	f[1] = slab_object_create(&sp);
-	f[2] = slab_object_create(&sp);
+	f[0] = slab_object_create(&sp, NULL);
+	f[1] = slab_object_create(&sp, NULL);
+	f[2] = slab_object_create(&sp, NULL);
 	slab_object_destroy(&sp, f[0]);
 	slab_object_destroy(&sp, f[1]);
 	slab_object_destroy(&sp, f[2]);

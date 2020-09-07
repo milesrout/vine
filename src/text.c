@@ -1,84 +1,256 @@
 #include <unistd.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <termios.h>
 
 #include "abort.h"
 #include "alloc.h"
+#include "alloc_buf.h"
+#include "slab_pool.h"
 #include "checked.h"
 #include "types.h"
 #include "printf.h"
 #include "memory.h"
 #include "text.h"
+#include "hash.h"
 
 static void text_tree_init(struct text_tree *);
 static void text_tree_finish(struct text_tree *);
-static void text_tree_insert_before(struct text_tree *, struct text_node *);
-static void text_tree_insert_after(struct text_tree *, struct text_node *);
+static void text_tree_insert_childless_before(struct text_tree *, struct text_node *);
+static void text_tree_insert_childless_after(struct text_tree *, struct text_node *);
 static void text_tree_replace(struct text_tree *, struct text_node *);
 static void text_tree_split(struct text *, size_t);
 static struct text_node *text_tree_get(struct text_tree *, size_t);
-static struct text_node *get_active_piece(struct text *, size_t);
+static struct text_node *get_mutable_piece(struct text *, size_t);
 static void do_splay(struct text_tree *, size_t);
 static void print_text_tree_inorder(struct text_node *, size_t, size_t);
+static void insert_at(struct text *tx, size_t cursor, char *buf, size_t len);
+static void insert_node_at(struct text *tx, size_t cursor, struct text_node *P);
+static void text_tree_insert_leftchild_after(struct text_tree *tree, struct text_node *new);
+static void text_tree_insert_leftchild_before(struct text_tree *tree, struct text_node *new);
+static struct text_node *create_node(struct text *tx, struct text_piece *p);
+static struct text_piece *create_piece(struct text *tx);
 
+#define NODE_SIZE sizeof(struct text_node)
+#define NODE_ALIGN __alignof__(struct text_node)
+#define PIECE_SIZE sizeof(struct text_piece)
+#define PIECE_ALIGN __alignof__(struct text_piece)
+#define BUFFER_SIZE PAGE_SIZE
+
+static
+void
+text_node_init(struct text_node *n, struct text_piece *p)
+{
+	n->txn_parent = NULL;
+	n->txn_left = NULL;
+	n->txn_left_size = 0;
+	n->txn_right = NULL;
+	n->txn_right_size = 0;
+	n->txn_piece = p;
+}
+#define BLUE "cornflowerblue"
+#define RED  "crimson"
+static
+log_node(FILE *f, struct text_node *n)
+{
+	efprintf(f, "        \"%p\" [label=\"", n);
+
+	if (n->txn_left == NULL) {
+		efprintf(f, "%lu:", n->txn_left_size);
+	}
+	efprintf(f, "%x:%.*s",
+		(u16)(u64)n, n->txn_piece->txp_len, n->txn_piece->txp_buf);
+	if (n->txn_right == NULL) {
+		efprintf(f, ":%lu",
+			n->txn_right_size);
+	}
+	efprintf(f, "\",color=\"%s\"];\n",
+		n->txn_piece->txp_state ? RED : BLUE);
+
+	if (n->txn_left) {
+		efprintf(f, "        \"%p\" -> \"%p\" [label=\"%lu\"];\n",
+			n, n->txn_left, n->txn_left_size);
+		log_node(f, n->txn_left);
+	}
+	if (n->txn_right) {
+		efprintf(f, "        \"%p\" -> \"%p\" [label=\"%lu\"];\n",
+			n, n->txn_right, n->txn_right_size);
+		log_node(f, n->txn_right);
+	}
+	if (n->txn_parent) {
+		efprintf(f, "        \"%p\" -> \"%p\" [style=\"dotted\"];\n",
+			n, n->txn_parent);
+	}
+}
+
+static
+log_tree_n(FILE *f, struct text_node *n)
+{
+	efprintf(f, "digraph vine {\n");
+	efprintf(f, "        graph [ordering=\"out\"];\n");
+	efprintf(f, "        ratio = fill;\n");
+	efprintf(f, "        node [style=\"filled\"];\n");
+	log_node(f, n);
+	efprintf(f, "}\n");
+}
+
+static
+log_tree(FILE *f, struct text_tree *t)
+{
+	efprintf(f, "digraph vine {\n");
+	efprintf(f, "        graph [ordering=\"out\"];\n");
+	efprintf(f, "        ratio = fill;\n");
+	efprintf(f, "        node [style=\"filled\"];\n");
+	log_node(f, t->txt_root);
+	efprintf(f, "}\n");
+}
+
+static
+void
+check_parents_are_correct(struct text_node *n)
+{
+	if (n->txn_left != NULL) {
+		assert1(n == n->txn_left->txn_parent);
+		check_parents_are_correct(n->txn_left);
+	}
+	if (n->txn_right != NULL) {
+		assert1(n == n->txn_right->txn_parent);
+		check_parents_are_correct(n->txn_right);
+	}
+}
+
+static
+size_t
+check_sizes_are_correct(struct text_node *n)
+{
+	if (n->txn_left == NULL) {
+		assert1(n->txn_left_size == 0);
+	} else {
+		assert1(n->txn_left_size == check_sizes_are_correct(n->txn_left));
+	}
+	if (n->txn_right == NULL) {
+		assert1(n->txn_right_size == 0);
+	} else {
+		assert1(n->txn_right_size == check_sizes_are_correct(n->txn_right));
+	}
+	return n->txn_left_size + n->txn_right_size + n->txn_piece->txp_len;
+}
+
+volatile int g_dobreak;
+
+static
+void
+log_the_tree(struct text_node *n)
+{
+	FILE *f = fopen("out.dot", "w");
+	log_tree_n(f, n);
+	fclose(f);
+	if (g_dobreak)
+		breakpoint();
+	efprintf(stderr, "LOGGED TREE\n");
+}
+
+static
+void
+check_tree_invariants(struct text_node *n)
+{
+	log_the_tree(n);
+	check_parents_are_correct(n);
+	(void)check_sizes_are_correct(n);
+}
+
+static
+void
+check_invariants(struct text *tx)
+{
+	check_tree_invariants(tx->tx_tree.txt_root);
+}
+
+/*
+ * INVARIANTS:
+ *
+ * IF   (tx_add_buf != NULL)
+ * THEN (tx_tree.txt_root->txn_piece->txp_state == TXP_CONST)
+ *
+ * IF   (n->txn_piece->txp_state == TXP_MUTABLE)
+ * THEN (n->txn_parent == NULL && tx_add_buf == NULL)
+ */
 void
 text_init(struct text *tx, struct alloc *alloc, char *buf, size_t len)
 {
+	struct text_piece *orig;
+
 	tx->tx_alloc = alloc;
 
-	/* this needs to be a linked list, right? */
-	tx->tx_pieces = allocarray_with(alloc, sizeof(struct text_piece), 1);
-	tx->tx_pieces[0].txp_buf = buf;
-	tx->tx_pieces[0].txp_len = len;
-	tx->tx_pieces_len = 1;
-	tx->tx_pieces_cap = 1;
-	tx->tx_active_piece = NULL;
+	/* create the object pools */
+	slab_pool_init(&tx->tx_nodes_pool, NODE_SIZE, NODE_ALIGN, (void(*)(void *, void *))text_node_init, NULL);
+	slab_pool_init(&tx->tx_pieces_pool, PIECE_SIZE, PIECE_ALIGN, NULL, NULL);
 
-	text_tree_init(&tx->tx_tree);
-	tx->tx_tree.txt_root = allocate_with(alloc, sizeof(struct text_node));
-	tx->tx_tree.txt_root->txn_parent = NULL;
-	tx->tx_tree.txt_root->txn_left = NULL;
-	tx->tx_tree.txt_root->txn_left_size = 0;
-	tx->tx_tree.txt_root->txn_right = NULL;
-	tx->tx_tree.txt_root->txn_right_size = 0;
-	tx->tx_tree.txt_root->txn_piece = tx->tx_pieces;
+	efprintf(stderr, "text_node: %lu @ %lu\n", NODE_SIZE, NODE_ALIGN);
+	efprintf(stderr, "text_piece: %lu @ %lu\n", PIECE_SIZE, PIECE_ALIGN);
+
+	/* create a text piece for the original buffer content */
+	orig = create_piece(tx);
+	orig->txp_buf = buf;
+	orig->txp_len = len;
+	orig->txp_state = TXP_CONST;
 
 	tx->tx_orig_buf = buf;
 	tx->tx_orig_buf_len = len;
+	tx->tx_add_buf = NULL;
+	tx->tx_add_buf_cap = 0;
 
-	/* this needs to be a linked list */
-	tx->tx_append_buf = allocate_with(&mmap_alloc, PAGE_SIZE);
-	tx->tx_append_buf_len = 0;
-	tx->tx_append_buf_cap = PAGE_SIZE;
+	text_tree_init(&tx->tx_tree);
+	tx->tx_tree.txt_root = create_node(tx, orig);
 }
 
 void
 text_finish(struct text *tx)
 {
-	deallocarray_with(tx->tx_alloc, tx->tx_pieces,
-		sizeof(struct text_piece), tx->tx_pieces_cap);
-	text_tree_finish(&tx->tx_tree);
+	slab_pool_finish(&tx->tx_nodes_pool);
+	slab_pool_finish(&tx->tx_pieces_pool);
+}
 
-	deallocate_with(&mmap_alloc, tx->tx_append_buf, tx->tx_append_buf_cap);
+static
+struct text_node *
+create_node(struct text *tx, struct text_piece *p)
+{
+	return (struct text_node *)slab_object_create(&tx->tx_nodes_pool, p);
 }
 
 static
 struct text_piece *
-uninit_text_piece(struct text *tx)
+create_piece(struct text *tx)
 {
-	if (tx->tx_pieces_len == tx->tx_pieces_cap) {
-		tx->tx_pieces = reallocarray_with(tx->tx_alloc,
-			tx->tx_pieces,
-			sizeof(struct text_piece),
-			tx->tx_pieces_cap,
-			tx->tx_pieces_cap * 2);
-	}
+	return (struct text_piece *)slab_object_create(&tx->tx_pieces_pool, NULL);
+}
 
-	return tx->tx_pieces + tx->tx_pieces_len++;
+static
+char *
+create_buffer(struct text *tx)
+{
+	return allocate_with(&mmap_alloc, BUFFER_SIZE);
+}
+
+static
+void
+finish_root_piece(struct text *tx)
+{
+	struct text_piece *p = tx->tx_tree.txt_root->txn_piece;
+
+	/* nothing to do */
+	if (p->txp_state == TXP_CONST)
+		return;
+
+	assert1(tx->tx_add_buf == NULL);
+	tx->tx_add_buf = p->txp_buf + p->txp_len;
+	tx->tx_add_buf_cap = p->txp_cap;
+	p->txp_state = TXP_CONST;
 }
 
 void
@@ -86,10 +258,17 @@ test_text(void)
 {
 	int insert = 0;
 	struct text tx;
-	char buf[] = "Hello, world!";
+	char buf[] = "hello, world!";
 	size_t cursor = 0;
 	size_t size = sizeof(buf) - 1;
 	static struct termios oldterm, newterm;
+
+	eprintf("piece %lux%lu=%lu\n", sizeof(struct text_piece), PAGE_SIZE /
+			sizeof(struct text_piece), PAGE_SIZE / sizeof(struct
+				text_piece) * sizeof(struct text_piece));
+	eprintf("node %lux%lu=%lu\n", sizeof(struct text_node), PAGE_SIZE /
+			sizeof(struct text_node), PAGE_SIZE / sizeof(struct
+				text_node) * sizeof(struct text_node));
 
 	tcgetattr(STDIN_FILENO, &oldterm);
 	newterm = oldterm;
@@ -100,20 +279,16 @@ test_text(void)
 	eprintf("%.*s|%s\n", (int)cursor, buf, buf + cursor);
 	for (;;) {
 		int c;
+		check_invariants(&tx);
 		c = getchar();
 		if (insert) {
 			if ('A' <= c && c <= 'Z') {
-				struct text_node *n = get_active_piece(&tx, cursor);
-				tx.tx_append_buf[tx.tx_append_buf_len++] = (char)c;
-				n->txn_piece->txp_len++;
+				char ch = (char)c;
+				insert_at(&tx, cursor, &ch, 1);
 				cursor++;
 				size++;
 			} else {
-				/* commit active piece */
-				tx.tx_active_piece = NULL;
-				tx.tx_append_buf[tx.tx_append_buf_len++] = '\0';
-				if (tx.tx_append_buf_len > 20)
-					breakpoint();
+				finish_root_piece(&tx);
 				insert = 0;
 			}
 		} else {
@@ -127,6 +302,7 @@ test_text(void)
 				insert = 1;
 			}
 		}
+		eprintf("%lu %lu", cursor, size);
 		print_text_tree_inorder(tx.tx_tree.txt_root, cursor, 0);
 		eprintf("\n");
 	}
@@ -134,60 +310,250 @@ test_text(void)
 	text_finish(&tx);
 }
 
-/* Return a struct text_piece at the cursor that we are allowed to append to
- */
+/* Return a struct text_node at the cursor that we are allowed to append to
 static
 struct text_node *
-get_active_piece(struct text *tx, size_t cursor)
+get_mutable_piece(struct text *tx, size_t cursor)
 {
 	struct text_node *n;
 
-	/* splay the node corresponding to the current cursor position */
+	 * splay the node corresponding to the current cursor position * 
 	n = text_tree_get(&tx->tx_tree, cursor);
 
-	/* if the cursor points to the end of the currently active piece */
+	 * if the cursor points to the end of the currently active piece * 
 	if (n->txn_piece == tx->tx_active_piece)
 		if (cursor == n->txn_left_size + n->txn_piece->txp_len)
 			return n;
 
-	/* otherwise, we need to create a new editable piece and make it the
-	 * current piece */
+	 * otherwise, we need to create a new editable piece and make it the
+	 * current piece * 
 	text_tree_split(tx, cursor);
 
 	tx->tx_active_piece = tx->tx_tree.txt_root->txn_piece;
 	return tx->tx_tree.txt_root;
 }
+ */
 
-/* Split the given node at the position 'cursor'.  Requires that cursor points
- * into, immediately after or immediately before the node to split.  Requires
- * that the node to split is at the root of the tree.
+/* This is a rather complicated function because it has to handle a combination
+ * of cases.  When text is inserted at a position, there are a couple of
+ * possibilities.
+ *
+ * The simplest is that the text is being inserted at the end of the current,
+ * mutable text piece.  If there is room, the new text is just inserted at the
+ * end.  If there isn't room for all of it, as much is inserted into that piece
+ * as can be, then the piece is made immutable and a new piece is created for
+ * the rest.
+ *
+ * When text is not being inserted at the end of the current and mutable text
+ * piece, we need to create a new text piece for the text to be inserted,
+ * wherever it is.  If the current piece is mutable, then it is made immutable
+ * and any space remaining in it is saved as the 'add buffer'.
+ *
+ * When we create a new mutable text piece, we first check if there is an 'add  
+ * buffer' saved, and use that as the underlying buffer.  If there isn't, then
+ * we create a new buffer.  This is done in text_tree_split.
+ *
+ * In other words, we try the following in order:
+ * - insert at the end of the current mutable piece, OR
+ * - insert in a new piece created from tx_add_buf, OR
+ * - insert in a new piece created from a new buffer
  */
 static
 void
-text_tree_split(struct text *tx, size_t cursor)
+insert_at(struct text *tx, size_t cursor, char *buf, size_t len)
 {
-	struct text_node *n = tx->tx_tree.txt_root;
+	struct text_node *n = text_tree_get(&tx->tx_tree, cursor);
+	struct text_piece *p = n->txn_piece;
+	struct text_piece *q = NULL;
+
+	/* if the cursor points to a mutable piece */
+	if (p->txp_state == TXP_MUTABLE) {
+		/* and the cursor points to the end of that piece */
+		if (cursor == n->txn_left_size + n->txn_piece->txp_len) {
+			/* and that piece has room for the new data */
+			if (len <= p->txp_cap) {
+				/* copy the data into the existing buffer */
+				memcpy(p->txp_buf + p->txp_len, buf, len);
+				p->txp_len += len;
+				p->txp_cap -= len;
+				if (p->txp_cap == 0)
+					p->txp_state = TXP_CONST;
+				return;
+			} else {
+				/* copy as much data as possible */
+				memcpy(p->txp_buf + p->txp_len, buf, p->txp_cap);
+				len -= p->txp_cap;
+				/* update our cursor to point to the position
+				 * that we will be inserting the remaining
+				 * text.  we do not need to retain the old
+				 * cursor because the text we are inserting
+				 * here is going directly into the tree i.e. we
+				 * don't need to insert it later with
+				 * a cursor. */
+				cursor += p->txp_cap;
+				buf += p->txp_cap;
+				p->txp_len += p->txp_cap;
+				p->txp_state = TXP_CONST;
+				p->txp_cap = 0;
+			}
+		} else {
+			/* the cursor points to the middle of the current
+			 * mutable piece, so we'll have to split it.  we'll
+			 * make it constant and make its spare capacity the
+			 * 'add buffer' now so that we don't have to do this
+			 * later when it gets split */
+			tx->tx_add_buf = p->txp_buf + p->txp_len;
+			tx->tx_add_buf_cap = p->txp_cap;
+			p->txp_state = TXP_CONST;
+		}
+	}
+
+	/* if we get here, then the cursor points into an immutable piece,
+	 * either because it was that way already or because we just made it
+	 * immutable.
+	 */
+
+	/* if there is an add buffer */
+	if (tx->tx_add_buf != NULL) {
+		/* the piece for the 'add buffer' part of the inserted text */
+		q = create_piece(tx);
+		/* if the add buffer has sufficient capacity */
+		if (tx->tx_add_buf_cap >= len) {
+			/* copy the data into the existing buffer */
+			memcpy(tx->tx_add_buf, buf, len);
+			q->txp_buf = tx->tx_add_buf;
+			q->txp_len = len;
+			q->txp_cap = tx->tx_add_buf_cap - len;
+			q->txp_state = q->txp_cap == 0
+				? TXP_CONST
+				: TXP_MUTABLE;
+			tx->tx_add_buf = NULL;
+			tx->tx_add_buf_cap = 0;
+			insert_node_at(tx, cursor, create_node(tx, q));
+			return;
+		}
+		/* the add buffer has insufficient capacity */
+		else {
+			/* copy as much data as possible */
+			memcpy(tx->tx_add_buf, buf, tx->tx_add_buf_cap);
+			len -= tx->tx_add_buf_cap;
+			q->txp_buf = tx->tx_add_buf;
+			q->txp_len = tx->tx_add_buf_cap;
+			q->txp_cap = 0;
+			q->txp_state = TXP_CONST;
+			tx->tx_add_buf = NULL;
+			tx->tx_add_buf_cap = 0;
+		}
+	}
+
+	/* if we get here, then the cursor points into an immutable piece and
+	 * the add buffer doesn't exist.  there may or may not be an immutable
+	 * piece `*q' which contains the initial part of the text we need to
+	 * insert.  if there isn't, `q' will be NULL.
+	 */
+
+	/* create a new buffer for the remaining text to be inserted */
+	{
+		/* we will overallocate to the nearest BUFFER_SIZE, but worry
+		 * not, this buffer will be reused if needed
+		 */
+		size_t bufsz = align_sz(len, BUFFER_SIZE);
+		char *newbuf = allocate_with(&mmap_alloc, bufsz);
+		memcpy(newbuf, buf, len);
+		p = create_piece(tx);
+		p->txp_buf = newbuf;
+		p->txp_len = len;
+		p->txp_cap = bufsz - len;
+		p->txp_state = p->txp_cap == 0 ? TXP_CONST : TXP_MUTABLE;
+	}
+
+	{
+		struct text_node *P = create_node(tx, p);
+		struct text_node *Q = q == NULL ? NULL : create_node(tx, q);
+		size_t left_edge_pos = n->txn_left_size;
+		size_t right_edge_pos = n->txn_left_size +
+			n->txn_piece->txp_len;
+
+		if (cursor == left_edge_pos) {
+			if (q == NULL) {
+				text_tree_insert_childless_before(&tx->tx_tree, P);
+			} else {
+				P->txn_left = Q;
+				P->txn_left_size = Q->txn_piece->txp_len;
+				Q->txn_parent = P;
+				text_tree_insert_leftchild_before(&tx->tx_tree, P);
+			}
+		} else if (cursor == right_edge_pos) {
+			if (q == NULL) {
+				text_tree_insert_childless_after(&tx->tx_tree, P);
+			} else {
+				P->txn_left = Q;
+				P->txn_left_size = Q->txn_piece->txp_len;
+				Q->txn_parent = P;
+				text_tree_insert_leftchild_after(&tx->tx_tree, P);
+			}
+		} else if (cursor < left_edge_pos || cursor > right_edge_pos) {
+			breakpoint();
+			/* abort_with_error("insert_at: This case should be impossible"); */
+		} else {
+			struct text_piece *l = create_piece(tx);
+			struct text_piece *r = create_piece(tx);
+			struct text_node *L = create_node(tx, l);
+			struct text_node *R = create_node(tx, r);
+
+			/* how far into the node the cursor is */
+			size_t offset = cursor - left_edge_pos;
+
+			l->txp_buf = n->txn_piece->txp_buf;
+			l->txp_len = offset;
+			l->txp_state = TXP_CONST;
+			r->txp_buf = n->txn_piece->txp_buf + offset;
+			r->txp_len = n->txn_piece->txp_len - offset;
+			r->txp_state = TXP_CONST;
+
+			L->txn_left = L->txn_right = NULL;
+			R->txn_left = R->txn_right = NULL;
+			L->txn_left_size = L->txn_right_size = 0;
+			R->txn_left_size = R->txn_right_size = 0;
+			L->txn_piece = l;
+			R->txn_piece = r;
+
+			P->txn_left = L;
+			P->txn_left_size = l->txp_len;
+			L->txn_parent = P;
+
+			P->txn_right = R;
+			P->txn_right_size = r->txp_len;
+			R->txn_parent = P;
+
+			if (q != NULL) {
+				L->txn_right = Q;
+				L->txn_right_size = Q->txn_piece->txp_len;
+				Q->txn_parent = L;
+
+				P->txn_left_size += Q->txn_piece->txp_len;
+			}
+
+			text_tree_replace(&tx->tx_tree, P);
+		}
+	}
+}
+
+static
+void
+insert_node_at(struct text *tx, size_t cursor, struct text_node *P)
+{
+	struct text_node *root = tx->tx_tree.txt_root;
 
 	/* because n is the root, its 'left size' is the size of all the text
 	 * on the left of this node i.e. the offset of the text in this node
 	 * from the beginning of the document */
-	size_t left_edge_pos = n->txn_left_size;
+	size_t left_edge_pos = root->txn_left_size;
 
 	/* same logic */
-	size_t right_edge_pos = n->txn_left_size + n->txn_piece->txp_len;
+	size_t right_edge_pos = root->txn_left_size + root->txn_piece->txp_len;
 
-	/* we always need to create a new blank and editable text piece */
-	struct text_node *P = allocate_with(tx->tx_alloc, sizeof(struct text_node));
-	struct text_piece *p = uninit_text_piece(tx);
-	p->txp_buf = tx->tx_append_buf + tx->tx_append_buf_len;
-	p->txp_len = 0;
-
-	/* it is zero-initialised by allocate_with and as such it should not be
-	 * necessary to initialise things to NULL/0 */
-	P->txn_parent = NULL;
-	P->txn_left = P->txn_right = NULL;
-	P->txn_left_size = P->txn_right_size = 0;
-	P->txn_piece = p;
+	/*breakpoint();*/
 
 	/* XXX: is it possible that either the left_edge or the right_edge case
 	 * is unnecessary?  after all, in nearly every case that we are at the
@@ -202,14 +568,15 @@ text_tree_split(struct text *tx, size_t cursor)
 	if (cursor == left_edge_pos) {
 		/* the cursor points directly before n.  we want to insert the
 		 * new node directly before n. */
-		text_tree_insert_before(&tx->tx_tree, P);
+		text_tree_insert_childless_before(&tx->tx_tree, P);
 	} else if (cursor == right_edge_pos) {
 		/* the cursor points directly after n.  we want to insert the
 		 * new node directly after n. */
-		text_tree_insert_after(&tx->tx_tree, P);
+		text_tree_insert_childless_after(&tx->tx_tree, P);
 	} else if (cursor < left_edge_pos || cursor > right_edge_pos) {
 		breakpoint();
-	} else {
+		abort_with_error("This case should not be possible");
+	} else { /* cursor > left_edge_pos && cursor < right_edge_pos */
 		/* the trickier case.  the cursor points within n.  we want to
 		 * create two new nodes corresponding to everything in
 		 * n before the cursor and everything in n after the
@@ -217,18 +584,20 @@ text_tree_split(struct text *tx, size_t cursor)
 		 * sure to insert the new blank and editable node last (or at
 		 * least that it is the root at the end - insert all three at
 		 * once and then splay it up perhaps? */
-		struct text_piece *l = uninit_text_piece(tx);
-		struct text_piece *r = uninit_text_piece(tx);
-		struct text_node *L = allocate_with(tx->tx_alloc, sizeof(struct text_node));
-		struct text_node *R = allocate_with(tx->tx_alloc, sizeof(struct text_node));
+		struct text_piece *l = create_piece(tx);
+		struct text_piece *r = create_piece(tx);
+		struct text_node *L = create_node(tx, l);
+		struct text_node *R = create_node(tx, r);
 
 		/* how far into the node the cursor is */
 		size_t offset = cursor - left_edge_pos;
 
-		l->txp_buf = n->txn_piece->txp_buf;
+		l->txp_buf = root->txn_piece->txp_buf;
 		l->txp_len = offset;
-		r->txp_buf = n->txn_piece->txp_buf + offset;
-		r->txp_len = n->txn_piece->txp_len - offset;
+		l->txp_state = TXP_CONST;
+		r->txp_buf = root->txn_piece->txp_buf + offset;
+		r->txp_len = root->txn_piece->txp_len - offset;
+		r->txp_state = TXP_CONST;
 
 		L->txn_left = L->txn_right = NULL;
 		R->txn_left = R->txn_right = NULL;
@@ -248,10 +617,143 @@ text_tree_split(struct text *tx, size_t cursor)
 	}
 }
 
+/* Split the root node at the position `cursor' in order to insert the new text
+ * piece `piece'.  If the cursor points immediately before or immediately after
+ * the root node, it isn't split and the new node is simply inserted directly
+ * before or after the root node.  Requires that cursor points into,
+ * immediately after or immediately before the node to split.  Requires that
+ * the node to split is at the root of the tree.
+static
+void
+text_tree_split(struct text *tx, size_t cursor, struct text_piece *piece)
+{
+	struct text_node *root = tx->tx_tree.txt_root;
+	struct text_node *P;
+
+	* because n is the root, its 'left size' is the size of all the text
+	 * on the left of this node i.e. the offset of the text in this node
+	 * from the beginning of the document *
+	size_t left_edge_pos = root->txn_left_size;
+
+	* same logic *
+	size_t right_edge_pos = root->txn_left_size + root->txn_piece->txp_len;
+
+	* this will be the new root node at the end of this operation *
+	P = create_node(tx, piece);
+
+	* XXX: is it possible that either the left_edge or the right_edge case
+	 * is unnecessary?  after all, in nearly every case that we are at the
+	 * left edge of a node we are also at the right edge of the previous
+	 * node and vice versa.  however, when we are at the beginning
+	 * (resp. end) there is no node before (resp. after) the node that will
+	 * get splayed to the top. 
+	 * possibly this is where having sentinel nodes really helps, because
+	 * it means that even when we are at the 'beginning' we're still
+	 * between two nodes and only need to consider one of these two cases.
+	 * c'est la vie. *
+	if (cursor == left_edge_pos) {
+		* the cursor points directly before n.  we want to insert the
+		 * new node directly before n. *
+		text_tree_insert_childless_before(&tx->tx_tree, P);
+	} else if (cursor == right_edge_pos) {
+		* the cursor points directly after n.  we want to insert the
+		 * new node directly after n. *
+		text_tree_insert_childless_after(&tx->tx_tree, P);
+	} else if (cursor < left_edge_pos || cursor > right_edge_pos) {
+		abort_with_error("This case should not be possible");
+	} else { * cursor > left_edge_pos && cursor < right_edge_pos *
+		* the trickier case.  the cursor points within n.  we want to
+		 * create two new nodes corresponding to everything in
+		 * n before the cursor and everything in n after the
+		 * cursor. then we want to insert the three new nodes, making
+		 * sure to insert the new blank and editable node last (or at
+		 * least that it is the root at the end - insert all three at
+		 * once and then splay it up perhaps? *
+		struct text_piece *l = create_piece(tx);
+		struct text_piece *r = create_piece(tx);
+		struct text_node *L = create_node(tx, l);
+		struct text_node *R = create_node(tx, r);
+
+		* how far into the node the cursor is *
+		size_t offset = cursor - left_edge_pos;
+
+		l->txp_buf = root->txn_piece->txp_buf;
+		l->txp_len = offset;
+		l->txp_state = TXP_CONST;
+		r->txp_buf = root->txn_piece->txp_buf + offset;
+		r->txp_len = root->txn_piece->txp_len - offset;
+		r->txp_state = TXP_CONST;
+
+		L->txn_left = L->txn_right = NULL;
+		R->txn_left = R->txn_right = NULL;
+		L->txn_left_size = L->txn_right_size = 0;
+		R->txn_left_size = R->txn_right_size = 0;
+		L->txn_piece = l;
+		R->txn_piece = r;
+
+		P->txn_left = L;
+		P->txn_right = R;
+		P->txn_left_size = l->txp_len;
+		P->txn_right_size = r->txp_len;
+		L->txn_parent = P;
+		R->txn_parent = P;
+
+		text_tree_replace(&tx->tx_tree, P);
+	}
+}
+ */
+
+static
+void
+text_tree_insert_leftchild_before(struct text_tree *tree, struct text_node *new)
+{
+	struct text_node *root = tree->txt_root;
+
+	new->txn_left->txn_left = root->txn_left;
+	new->txn_left->txn_left_size = root->txn_left_size;
+	new->txn_left_size += root->txn_left_size;
+	new->txn_right = root;
+	new->txn_right_size = root->txn_right_size + root->txn_piece->txp_len;
+
+	root->txn_left = NULL;
+	root->txn_left_size = 0;
+
+	if (new->txn_left->txn_left)
+		new->txn_left->txn_left->txn_parent = new->txn_left;
+	if (new->txn_right)
+		new->txn_right->txn_parent = new;
+
+	tree->txt_root = new;
+}
+
+
+static
+void
+text_tree_insert_leftchild_after(struct text_tree *tree, struct text_node *new)
+{
+	struct text_node *root = tree->txt_root;
+
+	new->txn_right->txn_right = root->txn_right;
+	new->txn_right->txn_right_size = root->txn_right_size;
+	new->txn_right_size += root->txn_right_size;
+	new->txn_left = root;
+	new->txn_left_size = root->txn_left_size + root->txn_piece->txp_len;
+
+	root->txn_right = NULL;
+	root->txn_right_size = 0;
+
+	if (new->txn_left)
+		new->txn_left->txn_parent = new;
+	if (new->txn_right->txn_right)
+		new->txn_right->txn_right->txn_parent = new->txn_right;
+
+	tree->txt_root = new;
+}
+
 /* Add a new childless node immediately before the root node in the tree */
 static
 void
-text_tree_insert_before(struct text_tree *tree, struct text_node *new)
+text_tree_insert_childless_before(struct text_tree *tree, struct text_node *new)
 {
 	struct text_node *root = tree->txt_root;
 
@@ -275,7 +777,7 @@ text_tree_insert_before(struct text_tree *tree, struct text_node *new)
 /* Add a new childless node immediately after the root node in the tree */
 static
 void
-text_tree_insert_after(struct text_tree *tree, struct text_node *new)
+text_tree_insert_childless_after(struct text_tree *tree, struct text_node *new)
 {
 	struct text_node *root = tree->txt_root;
 
@@ -296,18 +798,42 @@ text_tree_insert_after(struct text_tree *tree, struct text_node *new)
 }
 
 /* Replace the root node of the tree with 'new', which must have exactly two
- * children, each of which must have exactly zero children. */
+ * children, the left of which must not have a left child and the right of
+ * which must not have a right child.
+ *
+ *              N               N
+ *    A        / \             / \
+ *   / \   +  L   R    -->    L   R
+ *  B   C      \ /           / \ / \
+ *             ? ?          B  ? ?  C
+ *
+ *            thus
+ *
+ *                              N
+ *    A         N              / \
+ *   / \   +   / \     -->    L   R
+ *  B   C     L   R          /     \
+ *                          B       C
+ *
+ *             and
+ *
+ *              N               N
+ *    A        / \             / \
+ *   / \   +  L   R    -->    L   R
+ *  B   C      \             / \   \
+ *              Q           B   Q   C
+ */
 static
 void
 text_tree_replace(struct text_tree *tree, struct text_node *new)
 {
 	new->txn_left->txn_left = tree->txt_root->txn_left;
 	new->txn_left->txn_left_size = tree->txt_root->txn_left_size;
-	new->txn_left_size = new->txn_left->txn_left_size + new->txn_left->txn_piece->txp_len;
+	new->txn_left_size += tree->txt_root->txn_left_size;
 
 	new->txn_right->txn_right = tree->txt_root->txn_right;
 	new->txn_right->txn_right_size = tree->txt_root->txn_right_size;
-	new->txn_right_size = new->txn_right->txn_right_size + new->txn_right->txn_piece->txp_len;
+	new->txn_right_size += tree->txt_root->txn_right_size;
 
 	if (new->txn_left->txn_left)
 		new->txn_left->txn_left->txn_parent = new->txn_left;
@@ -315,6 +841,7 @@ text_tree_replace(struct text_tree *tree, struct text_node *new)
 		new->txn_right->txn_right->txn_parent = new->txn_right;
 
 	tree->txt_root = new;
+	check_tree_invariants(tree->txt_root);
 }
 
 static
@@ -325,6 +852,7 @@ text_tree_get(struct text_tree *tree, size_t cursor)
 	return tree->txt_root;
 }
 
+/*
 static
 size_t
 parental_left_offset(struct text_node *n)
@@ -339,24 +867,24 @@ parental_left_offset(struct text_node *n)
 	} else if (n == n->txn_parent->txn_left) {
 		return parental_left_offset(n->txn_parent);
 	} else {
-		size_t result = 0;
-		breakpoint();
-		return result;
+		*abort_with_error("This case should not be possible");*
+		return 0;
 	}
 }
+*/
 
 static
 size_t
 left_edge(struct text_node *n)
 {
-	return parental_left_offset(n) + n->txn_left_size;
+	return n->txn_left_size;
 }
 
 static
 size_t
 right_edge(struct text_node *n)
 {
-	return left_edge(n) + n->txn_piece->txp_len;
+	return n->txn_left_size + n->txn_piece->txp_len;
 }
 
 static
@@ -376,23 +904,31 @@ do_splay(struct text_tree *tree, size_t cursor)
 {
 	struct text_node *t = tree->txt_root;
 	struct text_node n, *l, *r, *y;
+	size_t parental_left_offset = 0;
 
 	if (t == NULL)
 		return;
+
+	/*check_tree_invariants(tree->txt_root);*/
 
 	n.txn_left = n.txn_right = NULL;
 	n.txn_left_size = n.txn_right_size = 0;
 	l = r = &n;
 
+	breakpoint();
+
 	for (;;) {
 		/* we cannot assume that t is always the root: sometimes it
 		 * isn't, sometimes it's the left or right child of the last
-		 * thing that was t */
+		 * thing that was t
 		size_t le = left_edge(t);
+		*/
+		size_t le = parental_left_offset + left_edge(t);
+		size_t re = parental_left_offset + right_edge(t);
 		if (cursor <= le && !(cursor == 0 && le == 0)) {
 			if (t->txn_left == NULL)
 				break;
-			if (cursor <= left_edge(t->txn_left)) {
+			if (cursor <= parental_left_offset + left_edge(t->txn_left)) {
 				y = t->txn_left;
 				t->txn_left = y->txn_right;
 				t->txn_left_size = y->txn_right_size;
@@ -407,13 +943,14 @@ do_splay(struct text_tree *tree, size_t cursor)
 			}
 			r->txn_left = t;
 			r->txn_left_size = calc_size(t);
+			if (r != &n)
+				t->txn_parent = r;
 			r = t;
-			t->txn_parent = NULL;
 			t = t->txn_left;
-		} else if (cursor > right_edge(t)) {
+		} else if (cursor > re) {
 			if (t->txn_right == NULL)
 				break;
-			if (cursor > right_edge(t->txn_right)) {
+			if (cursor > re + right_edge(t->txn_right)) {
 				y = t->txn_right;
 				t->txn_right = y->txn_left;
 				t->txn_right_size = y->txn_left_size;
@@ -428,8 +965,10 @@ do_splay(struct text_tree *tree, size_t cursor)
 			}
 			l->txn_right = t;
 			l->txn_right_size = calc_size(t);
+			if (l != &n)
+				t->txn_parent = l;
 			l = t;
-			t->txn_parent = NULL;
+			parental_left_offset += right_edge(t);
 			t = t->txn_right;
 		} else break;
 	}
@@ -439,17 +978,22 @@ do_splay(struct text_tree *tree, size_t cursor)
 	r->txn_left = t->txn_right;
 	r->txn_left_size = t->txn_right_size;
 
+	if (l->txn_right)
+		l->txn_right->txn_parent = l;
+	if (r->txn_left)
+		r->txn_left->txn_parent = r;
+
 	{
 		size_t left_total = t->txn_piece->txp_len + t->txn_left_size;
 		size_t right_total = t->txn_piece->txp_len + t->txn_right_size;
 		y = &n;
 		while (y != r) {
-			y->txn_left_size -= right_total;
+			y->txn_left_size -= left_total;
 			y = y->txn_left;
 		}
 		y = &n;
 		while (y != l) {
-			y->txn_right_size -= left_total;
+			y->txn_right_size -= right_total;
 			y = y->txn_right;
 		}
 	}
@@ -465,6 +1009,7 @@ do_splay(struct text_tree *tree, size_t cursor)
 		t->txn_right->txn_parent = t;
 
 	t->txn_parent = NULL;
+	check_tree_invariants(tree->txt_root);
 	tree->txt_root = t;
 }
 

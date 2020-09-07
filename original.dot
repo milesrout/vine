@@ -1,0 +1,36 @@
+digraph vine {
+        graph [ordering="out"];
+        ratio = fill;
+        node [style="filled"];
+        "0x7ffff7fc2270" [label="2270:P",color="cornflowerblue"];
+        "0x7ffff7fc2270" -> "0x7ffff7fc2060" [label="1"];
+        "0x7ffff7fc2060" [label="0:2060:Q:0",color="cornflowerblue"];
+        "0x7ffff7fc2060" -> "0x7ffff7fc2270" [style="dotted"];
+        "0x7ffff7fc2270" -> "0x7ffff7fc2210" [label="19"];
+        "0x7ffff7fc2210" [label="2210:e",color="cornflowerblue"];
+        "0x7ffff7fc2210" -> "0x7ffff7fc2180" [label="6"];
+        "0x7ffff7fc2180" [label="2180:h",color="cornflowerblue"];
+        "0x7ffff7fc2180" -> "0x7ffff7fc20f0" [label="4"];
+        "0x7ffff7fc20f0" [label="20f0:R",color="cornflowerblue"];
+        "0x7ffff7fc20f0" -> "0x7ffff7fc2090" [label="2"];
+        "0x7ffff7fc2090" [label="0:2090:F",color="cornflowerblue"];
+        "0x7ffff7fc2090" -> "0x7ffff7fc20c0" [label="1"];
+        "0x7ffff7fc20c0" [label="0:20c0:E:0",color="cornflowerblue"];
+        "0x7ffff7fc20c0" -> "0x7ffff7fc2090" [style="dotted"];
+        "0x7ffff7fc2090" -> "0x7ffff7fc20f0" [style="dotted"];
+        "0x7ffff7fc20f0" -> "0x7ffff7fc2120" [label="1"];
+        "0x7ffff7fc2120" [label="0:2120:T:0",color="cornflowerblue"];
+        "0x7ffff7fc2120" -> "0x7ffff7fc20f0" [style="dotted"];
+        "0x7ffff7fc20f0" -> "0x7ffff7fc2180" [style="dotted"];
+        "0x7ffff7fc2180" -> "0x7ffff7fc2150" [label="1"];
+        "0x7ffff7fc2150" [label="0:2150:Y:0",color="cornflowerblue"];
+        "0x7ffff7fc2150" -> "0x7ffff7fc2180" [style="dotted"];
+        "0x7ffff7fc2180" -> "0x7ffff7fc2210" [style="dotted"];
+        "0x7ffff7fc2210" -> "0x7ffff7fc21e0" [label="12"];
+        "0x7ffff7fc21e0" [label="0:21e0:U",color="cornflowerblue"];
+        "0x7ffff7fc21e0" -> "0x7ffff7fc2240" [label="11"];
+        "0x7ffff7fc2240" [label="0:2240:llo, world!:0",color="cornflowerblue"];
+        "0x7ffff7fc2240" -> "0x7ffff7fc21e0" [style="dotted"];
+        "0x7ffff7fc21e0" -> "0x7ffff7fc2210" [style="dotted"];
+        "0x7ffff7fc2210" -> "0x7ffff7fc2270" [style="dotted"];
+}
