@@ -18,6 +18,7 @@
 #include "memory.h"
 #include "text.h"
 #include "hash.h"
+#include "heapstring.h"
 
 static void text_tree_init(struct text_tree *);
 static void text_tree_finish(struct text_tree *);
@@ -35,6 +36,8 @@ static void text_tree_insert_leftchild_after(struct text_tree *tree, struct text
 static void text_tree_insert_leftchild_before(struct text_tree *tree, struct text_node *new);
 static struct text_node *create_node(struct text *tx, struct text_piece *p);
 static struct text_piece *create_piece(struct text *tx);
+static size_t true_size(struct text_node *n);
+static void copy_to_buffer(struct text_node *t, size_t first, size_t last, char *buf, size_t cap, size_t *copied);
 
 #define NODE_SIZE sizeof(struct text_node)
 #define NODE_ALIGN __alignof__(struct text_node)
@@ -53,6 +56,7 @@ text_node_init(struct text_node *n, struct text_piece *p)
 	n->txn_right_size = 0;
 	n->txn_piece = p;
 }
+
 #define BLUE "cornflowerblue"
 #define RED  "crimson"
 static
@@ -63,8 +67,8 @@ log_node(FILE *f, struct text_node *n)
 	if (n->txn_left == NULL) {
 		efprintf(f, "%lu:", n->txn_left_size);
 	}
-	efprintf(f, "%x:%.*s",
-		(u16)(u64)n, n->txn_piece->txp_len, n->txn_piece->txp_buf);
+	efprintf(f, "%lx:%.*s",
+		(0xffff & (u64)n), n->txn_piece->txp_len, n->txn_piece->txp_buf);
 	if (n->txn_right == NULL) {
 		efprintf(f, ":%lu",
 			n->txn_right_size);
@@ -126,6 +130,23 @@ check_parents_are_correct(struct text_node *n)
 
 static
 size_t
+true_size(struct text_node *n)
+{
+	size_t result = 0;
+
+	if (n != NULL) {
+		if (n->txn_left != NULL)
+			result += true_size(n->txn_left);
+		if (n->txn_right != NULL)
+			result += true_size(n->txn_left);
+		result += n->txn_piece->txp_len;
+	}
+
+	return result;
+}
+
+static
+size_t
 check_sizes_are_correct(struct text_node *n)
 {
 	if (n->txn_left == NULL) {
@@ -141,7 +162,7 @@ check_sizes_are_correct(struct text_node *n)
 	return n->txn_left_size + n->txn_right_size + n->txn_piece->txp_len;
 }
 
-volatile int g_dobreak;
+volatile int g_dobreak = 0;
 
 static
 void
@@ -253,15 +274,21 @@ finish_root_piece(struct text *tx)
 	p->txp_state = TXP_CONST;
 }
 
+#define TM_NORMAL 0
+#define TM_INSERT 1
+#define TM_VISUAL 2
+
 void
 test_text(void)
 {
-	int insert = 0;
+	int mode = TM_NORMAL;
 	struct text tx;
 	char buf[] = "hello, world!";
-	size_t cursor = 0;
+	size_t cursor = 0, vis_cursor = 0;
 	size_t size = sizeof(buf) - 1;
 	static struct termios oldterm, newterm;
+	struct heapstring *reg = NULL;
+	size_t reg_len = 0;
 
 	eprintf("piece %lux%lu=%lu\n", sizeof(struct text_piece), PAGE_SIZE /
 			sizeof(struct text_piece), PAGE_SIZE / sizeof(struct
@@ -281,25 +308,73 @@ test_text(void)
 		int c;
 		check_invariants(&tx);
 		c = getchar();
-		if (insert) {
-			if ('A' <= c && c <= 'Z') {
+		if (mode == TM_INSERT) {
+			if (c == 0x7f) {
+				finish_root_piece(&tx);
+				mode = TM_NORMAL;
+			} else if (c != 0x1b) {
 				char ch = (char)c;
 				insert_at(&tx, cursor, &ch, 1);
 				cursor++;
 				size++;
 			} else {
 				finish_root_piece(&tx);
-				insert = 0;
+				mode = TM_NORMAL;
+			}
+		} else if (mode == TM_VISUAL) {
+			if (c == 'l') {
+				cursor = (cursor + 1) % size;
+			} else if (c == 'h') {
+				cursor = (cursor - 1) % size;
+			} else if (c == 'y') {
+				size_t vis_first, vis_len, vis_last;
+				size_t copied;
+				if (cursor > vis_cursor) {
+					vis_len = cursor - vis_cursor; 
+					vis_last = cursor;
+					vis_first = vis_cursor;
+				} else {
+					vis_len = vis_cursor - cursor;
+					vis_first = cursor;
+					vis_last = vis_cursor;
+				}
+
+				if (reg != NULL)
+					heapstring_destroy(reg, &sys_alloc);
+				reg = heapstring_create(vis_len, &sys_alloc);
+				copy_to_buffer(tx.tx_tree.txt_root,
+					vis_first, vis_last,
+					reg->hs_str, reg->hs_cap,
+					&copied);
+				reg_len = copied;
+				eprintf("register(%lu==%lu)=[%.*s\n].",
+					vis_len, reg_len, vis_len, reg->hs_str);
+				mode = TM_NORMAL;
+			} else {
+				mode = TM_NORMAL;
 			}
 		} else {
-			if (c == EOF || c == 'q')
+			if (c == EOF || c == 'q') {
 				break;
-			else if (c == 'l')
+			} else if (c == 'v') {
+				vis_cursor = cursor;
+				mode = TM_VISUAL;
+			} else if (c == 'l') {
 				cursor = (cursor + 1) % size;
-			else if (c == 'h')
+			} else if (c == 'h') {
 				cursor = (cursor - 1) % size;
-			else if (c == 'i') {
-				insert = 1;
+			} else if (c == 'i') {
+				mode = TM_INSERT;
+			} else if (c == 'p') {
+				insert_at(&tx, cursor, reg->hs_str, reg_len);
+				size += reg_len;
+				finish_root_piece(&tx);
+			} else if (c == 'P') {
+				size_t loc = cursor == 0 ? 0 : cursor - 1;
+				insert_at(&tx, loc, reg->hs_str, reg_len);
+				size += reg_len;
+				cursor += reg_len;
+				finish_root_piece(&tx);
 			}
 		}
 		eprintf("%lu %lu", cursor, size);
@@ -988,12 +1063,14 @@ do_splay(struct text_tree *tree, size_t cursor)
 		size_t right_total = t->txn_piece->txp_len + t->txn_right_size;
 		y = &n;
 		while (y != r) {
-			y->txn_left_size -= left_total;
+			/*y->txn_left_size -= left_total;*/
+			y->txn_left_size = true_size(y->txn_left);
 			y = y->txn_left;
 		}
 		y = &n;
 		while (y != l) {
-			y->txn_right_size -= right_total;
+			/*y->txn_right_size -= right_total;*/
+			y->txn_right_size = true_size(y->txn_right);
 			y = y->txn_right;
 		}
 	}
@@ -1055,4 +1132,91 @@ print_text_tree_inorder(struct text_node *t, size_t cursor, size_t parent)
 	}
 
 	print_text_tree_inorder(t->txn_right, cursor, end);
+}
+
+/* parent is the length of everything preceding this node that is above
+ * it in the tree */
+static
+void
+copy_to_buffer(struct text_node *t, size_t first, size_t last, char *buf, size_t cap, size_t *copied)
+{
+	size_t subcopied;
+	int do_before = 0, do_after = 0;
+	size_t start, len, end, offset, amount, front, back;
+	*copied = 0;
+
+	if (t == NULL)
+		return;
+
+	/* the first start and end positions and length of this node's piece */
+	start = t->txn_left_size;
+	len = t->txn_piece->txp_len;
+	end = start + len;
+
+	efprintf(stderr, "first=%lu, last=%lu, start=%lu, end=%lu, cap=%lu\n",
+		first, last, start, end, cap);
+
+	if (end <= first) {
+		efprintf(stderr, "going right");
+		return copy_to_buffer(t->txn_right, first, last, buf, cap, copied);
+	}
+	if (last <= start) {
+		efprintf(stderr, "going left");
+		return copy_to_buffer(t->txn_left, first, last, buf, cap, copied);
+	}
+
+	/*
+	copy_to_buffer(t->txn_left, first, last, buf, cap, &subcopied);
+	cap -= subcopied;
+	buf += subcopied;
+	*copied += subcopied;
+
+	copy_to_buffer(t->txn_right, first, last, buf, cap, &subcopied);
+	cap -= subcopied;
+	buf += subcopied;
+	*copied += subcopied;
+	*/
+
+	if (start <= first && first <= end && end <= last) {
+		front = first;
+		back = end;
+		do_after = 1;
+	} else if (start <= first && last <= end) {
+		front = first;
+		back = last;
+	} else if (first <= start && end <= last) {
+		front = start;
+		back = end;
+		do_before = 1;
+		do_after = 1;
+	} else if (first <= start && start <= last && last <= end) {
+		front = start;
+		back = last;
+		do_before = 1;
+	}
+
+	if (do_before) {
+		efprintf(stderr, "do_before!\n");
+		copy_to_buffer(t->txn_left, first, last, buf, cap, &subcopied);
+		cap -= subcopied;
+		buf += subcopied;
+		*copied += subcopied;
+	}
+
+	offset = front - start;
+	amount = back - front;
+	if (amount > cap) amount = cap;
+
+	strncpy(buf, t->txn_piece->txp_buf + offset, amount);
+	cap -= amount;
+	buf += amount;
+	*copied += amount;
+
+	if (do_after) {
+		efprintf(stderr, "do_after!\n");
+		copy_to_buffer(t->txn_right, first, last, buf, cap, &subcopied);
+		cap -= subcopied;
+		buf += subcopied;
+		*copied += subcopied;
+	}
 }

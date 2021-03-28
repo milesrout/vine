@@ -1,0 +1,36 @@
+digraph vine {
+        graph [ordering="out"];
+        ratio = fill;
+        node [style="filled"];
+        "0x7ffff7fbe210" [label="e210:,",color="crimson"];
+        "0x7ffff7fbe210" -> "0x7ffff7fbe240" [label="24"];
+        "0x7ffff7fbe240" [label="0:e240: There is nothing better:0",color="cornflowerblue"];
+        "0x7ffff7fbe240" -> "0x7ffff7fbe210" [style="dotted"];
+        "0x7ffff7fbe210" -> "0x7ffff7fbe270" [label="204"];
+        "0x7ffff7fbe270" [label="0:e270: than a nice new long string.
+Of course some of these strings can be quite complicated.
+",color="cornflowerblue"];
+        "0x7ffff7fbe270" -> "0x7ffff7fbe1b0" [label="116"];
+        "0x7ffff7fbe1b0" [label="e1b0:reak ",color="cornflowerblue"];
+        "0x7ffff7fbe1b0" -> "0x7ffff7fbe180" [label="18"];
+        "0x7ffff7fbe180" [label="0:e180:It's important to ",color="cornflowerblue"];
+        "0x7ffff7fbe180" -> "0x7ffff7fbe150" [label="1"];
+        "0x7ffff7fbe150" [label="0:e150:b:0",color="cornflowerblue"];
+        "0x7ffff7fbe150" -> "0x7ffff7fbe180" [style="dotted"];
+        "0x7ffff7fbe180" -> "0x7ffff7fbe1b0" [style="dotted"];
+        "0x7ffff7fbe1b0" -> "0x7ffff7fbe1e0" [label="93"];
+        "0x7ffff7fbe1e0" [label="0:e1e0:up your sentences into pieces",color="cornflowerblue"];
+        "0x7ffff7fbe1e0" -> "0x7ffff7fbe120" [label="64"];
+        "0x7ffff7fbe120" [label="0:e120:.
+",color="cornflowerblue"];
+        "0x7ffff7fbe120" -> "0x7ffff7fbe0f0" [label="62"];
+        "0x7ffff7fbe0f0" [label="0:e0f0:But of course they aren't all complicated either.",color="cornflowerblue"];
+        "0x7ffff7fbe0f0" -> "0x7ffff7fbe030" [label="13"];
+        "0x7ffff7fbe030" [label="0:e030:hello, world!:0",color="cornflowerblue"];
+        "0x7ffff7fbe030" -> "0x7ffff7fbe0f0" [style="dotted"];
+        "0x7ffff7fbe0f0" -> "0x7ffff7fbe120" [style="dotted"];
+        "0x7ffff7fbe120" -> "0x7ffff7fbe1e0" [style="dotted"];
+        "0x7ffff7fbe1e0" -> "0x7ffff7fbe1b0" [style="dotted"];
+        "0x7ffff7fbe1b0" -> "0x7ffff7fbe270" [style="dotted"];
+        "0x7ffff7fbe270" -> "0x7ffff7fbe210" [style="dotted"];
+}
