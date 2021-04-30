@@ -42,6 +42,7 @@ struct fibre_ctx {
 	uint64_t fc_r12;
 	uint64_t fc_rbx;
 	uint64_t fc_rbp;
+	uint64_t reserved[9];
 };
 
 enum fibre_state {
@@ -76,7 +77,11 @@ struct fibre {
 	struct fibre_ctx f_ctx;
 	short f_state;
 	short f_prio;
+#ifdef VINE_USE_VALGRIND
 	unsigned f_valgrind_id;
+#else
+	unsigned reserved[1];
+#endif
 	char *f_stack;
 };
 
@@ -183,10 +188,10 @@ try_fibre_store_list_dequeue(struct fibre_store_list *list)
 
 /*
  * This value is calculated so that each fibre_store_block should be page-sized.
- * Currently, sizeof(fibre_store_node) is 88 bytes, so this value should be 46.
- * The block takes up 4048 bytes.
+ * Currently, sizeof(fibre_store_node) is 160 bytes, so this value should be 25.
+ * The block takes up 4008 bytes.
  */
-#define FIBRE_STORE_NODES_PER_BLOCK 46
+#define FIBRE_STORE_NODES_PER_BLOCK 25
 
 /*
  * struct fibres are allocated in page-sized blocks, which at the moment are
@@ -307,8 +312,8 @@ fibre_init(struct alloc *alloc, size_t stack_size)
 	size_t i;
 
 	log_info("fibre",
-		"Initialising fibre system with %luMiB-sized stacks\n",
-	        stack_size / 1024 / 1024);
+		"Initialising fibre system with %luKiB-sized stacks\n",
+	        stack_size / 1024);
 
 #define BLOCK_SIZE (sizeof(struct fibre_store_block))
 #define NODE_SIZE (sizeof(struct fibre_store_node))

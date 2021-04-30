@@ -30,6 +30,8 @@ attribute_format_printf(1, 2) extern void abort_with_error(const char *fmt, ...)
 #define assert1(condition)          do { if (!(condition)) __builtin_unreachable(); } while (0)
 #define assert2(condition, message) assert1(condition)
 #endif
+#define assertiff(cond1, cond2)     do { assertimpl(cond1, cond2); assertimpl(cond2, cond1); } while (0)
+#define assertimpl(cond1, cond2)    assert2(((!!(cond1)) ? (cond2) : 1), "expected `" #cond2 "' to be true whenever `" #cond1 "' is true")
 #ifndef VINE_PRINTF_H_INCLUDED
 #undef attribute_format_printf
 #endif

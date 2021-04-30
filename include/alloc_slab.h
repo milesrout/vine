@@ -9,15 +9,22 @@
 #endif
 #define VINE_ALLOC_SLAB_H_INCLUDED
 struct slab {
-	struct slab *slab_next;
-	struct buf_alloc slab_ba;
-	char slab_buf[1];
+	struct slab     *slab_next;
+	struct buf_alloc slab_alloc;
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+	char             slab_buf[0];
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 };
 #define SLAB_HEADER_SIZE (sizeof(struct slab) - 1)
 struct slab_alloc {
 	size_t sa_align, sa_size;
-	void (*sa_init)(void *ptr);
-	void (*sa_finish)(void *ptr);
+	void (*sa_init)(void *);
+	void (*sa_finish)(void *);
 	struct slab *sa_slabs;
 };
 extern void slab_alloc_init(struct slab_alloc *, size_t, size_t, void (*)(void *), void (*)(void *));

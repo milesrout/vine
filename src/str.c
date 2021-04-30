@@ -91,6 +91,7 @@ void
 string_expand_by(struct string *str, size_t atleast)
 {
 	size_t newcap;
+
 	if (atleast < str->str_cap) {
 		newcap = add_sz(str->str_cap, str->str_cap);
 	} else {
@@ -119,7 +120,7 @@ string_append_cstring(struct string *str, const char *cstr)
 		string_expand_by(str, len);
 	}
 
-	strncpy(str->str_str + str->str_len, cstr, len);
+	memcpy(str->str_str + str->str_len, cstr, len);
 	str->str_len += len;
 }
 

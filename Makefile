@@ -1,5 +1,6 @@
 ifeq ($(BUILD),release)
 	CFLAGS += -O3 -s -DNDEBUG -fno-delete-null-pointer-checks
+	LDFLAGS += -flto
 else ifeq ($(BUILD),valgrind)
 	CFLAGS += -Og -g -Werror -DVINE_USE_VALGRIND
 else ifeq ($(BUILD),sanitise)
@@ -51,19 +52,22 @@ VALGRIND_FLAGS += -s --show-leak-kinds=all --leak-check=full
 
 .PHONY: $(TARGET)
 $(TARGET): build/$(BUILD)/$(TARGET)
-	ln -sf build/$(BUILD)/$(TARGET) $(TARGET)
+	@echo '  SYMLINK ' $(TARGET) "->" build/$(BUILD)/$(TARGET)
+	@ln -sf build/$(BUILD)/$(TARGET) $(TARGET)
 
 build/$(BUILD)/$(TARGET): $(OBJS)
-	$(CC) $(OBJS) -o $@ $(LDFLAGS) $(LDLIBS)
+	@echo '  LD      ' $@
+	@$(CC) $(OBJS) -o $@ $(LDFLAGS) $(LDLIBS)
 
 build/$(BUILD)/%.c.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) -c $(CFLAGS) $< -o $@
-	@#$(RM) *.d
+	@echo '  CC      ' $<.o
+	@$(CC) -c $(CFLAGS) $< -o $@
 
 build/$(BUILD)/%.S.o: %.S
 	@mkdir -p $(dir $@)
-	$(AS) $(ASFLAGS) $< -o $@
+	@echo '  AS      ' $<.o
+	@$(AS) $(ASFLAGS) $< -o $@
 
 tags: $(SRCS)
 	gcc -M $(INCS) $(SRCS) | sed -e 's/[\ ]/\n/g' | \
@@ -79,7 +83,7 @@ cleanall: clean
 	$(RM) -r build/{debug,release,valgrind,sanitise}/*
 
 syntastic:
-	echo $(CFLAGS) | tr ' ' '\n' > .syntastic_c_config
+	echo $(CFLAGS) | tr ' ' '\n' | grep -v 'MMD\|MP\|max-errors' > .syntastic_c_config
 
 release:
 	-$(MAKE) "BUILD=release"

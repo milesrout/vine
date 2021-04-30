@@ -50,12 +50,12 @@ slab_object_create(struct slab_alloc *sa)
 
 	if (sa->sa_slabs == NULL) {
 		sa->sa_slabs = create_slab(sa->sa_slabs, align);
-		ptr = allocate_with(&sa->sa_slabs->slab_ba.ba_alloc, size);
+		ptr = allocate_with(&sa->sa_slabs->slab_alloc.ba_alloc, size);
 	} else {
-		ptr = try_allocate_with(&sa->sa_slabs->slab_ba.ba_alloc, size);
+		ptr = try_allocate_with(&sa->sa_slabs->slab_alloc.ba_alloc, size);
 		if (ptr == NULL) {
 			sa->sa_slabs = create_slab(sa->sa_slabs, align);
-			ptr = allocate_with(&sa->sa_slabs->slab_ba.ba_alloc, size);
+			ptr = allocate_with(&sa->sa_slabs->slab_alloc.ba_alloc, size);
 		} 
 	}
 	sa->sa_init(ptr);
@@ -76,7 +76,7 @@ create_slab(struct slab *next, size_t align)
 	char *buf = align_ptr(ptr + SLAB_HEADER_SIZE, align);
 	struct slab *slab = (struct slab *)ptr;
 	slab->slab_next = next;
-	buf_alloc_init(&slab->slab_ba, buf, (size_t)(ptr + PAGE_SIZE - buf));
+	buf_alloc_init(&slab->slab_alloc, buf, (size_t)(ptr + PAGE_SIZE - buf));
 	return slab;
 }
 
@@ -101,11 +101,11 @@ destroy_slab(struct slab *slab)
 #define FOO_ALIGN __alignof__(struct foo)
 #define FOO_SIZE sizeof(struct foo)
 
-/*__attribute__((__packed__))*/
+/* __attribute__((__packed__)) */
 struct foo {
 	struct string str;
-	char x;
 	size_t y;
+	char x;
 };
 
 static 

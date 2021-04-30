@@ -19,6 +19,8 @@ void
 assert_strbuf_invariant(struct strbuf *sb)
 {
 #ifndef NDEBUG
+	assertimpl(sb->sb_str == NULL, sb->sb_len == 1);
+	assertiff(sb->sb_str == NULL, sb->sb_cap == 0);
 	if (sb->sb_str == NULL) {
 		assert1(sb->sb_len == 0);
 		assert1(sb->sb_cap == 0);
@@ -26,6 +28,8 @@ assert_strbuf_invariant(struct strbuf *sb)
 		assert1(sb->sb_cap >= STRBUF_MIN_CAP);
 	}
 	assert1(sb->sb_len <= sb->sb_cap);
+#else
+	(void)sb;
 #endif
 }
 
@@ -80,8 +84,7 @@ strbuf_expand_to(struct strbuf *sb, size_t atleast)
 	if (sb->sb_str == NULL) {
 		sb->sb_str = allocate_with(sb->sb_alloc, atleast);
 	} else {
-		sb->sb_str = reallocate_with(
-			sb->sb_alloc,
+		sb->sb_str = reallocate_with(sb->sb_alloc,
 			sb->sb_str,
 			sb->sb_cap,
 			atleast);
@@ -113,7 +116,6 @@ strbuf_append_char(struct strbuf *sb, char ch)
 		strbuf_expand_by(sb, 1);
 	}
 
-
 	assert_strbuf_invariant(sb);
 
 	sb->sb_str[sb->sb_len] = ch;
@@ -131,7 +133,7 @@ strbuf_append_cstring(struct strbuf *sb, const char *cstr)
 
 	assert_strbuf_invariant(sb);
 
-	strncpy(sb->sb_str + sb->sb_len, cstr, len);
+	memcpy(sb->sb_str + sb->sb_len, cstr, len);
 	sb->sb_len += len;
 }
 
