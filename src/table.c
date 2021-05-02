@@ -22,14 +22,10 @@ static int tkey_equal(struct tkey, struct tkey);
 struct table *
 table_create(struct alloc *alloc, size_t initial_size)
 {
-	struct table *table = allocate_with(alloc, sizeof(struct table));
-	struct tpair *pairs = allocarray_with(alloc,
-		sizeof(struct tpair), initial_size);
+	struct table *table;
 
-	table->t_size = 0;
-	table->t_capacity = initial_size;
-	table->t_pairs = pairs;
-	table->t_alloc = alloc;
+	table = allocate_with(alloc, sizeof(struct table));
+	table_init(table, alloc, initial_size);
 
 	return table;
 }
@@ -54,7 +50,8 @@ table_init(struct table *table, struct alloc *alloc, size_t initial_size)
 void
 table_finish(struct table *table)
 {
-	deallocarray_with(table->t_alloc, table->t_pairs, table->t_capacity, sizeof(struct tpair));
+	deallocarray_with(table->t_alloc,
+		table->t_pairs, table->t_capacity, sizeof(struct tpair));
 }
 
 int
