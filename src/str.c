@@ -8,7 +8,7 @@
 #include "checked.h"
 #include "str.h"
 #include "util.h"
-#include "printf.h"
+#include "eprintf.h"
 
 #define STRING_MIN_CAP 16
 

@@ -6,7 +6,7 @@
 
 #include "types.h"
 #include "abort.h"
-#include "printf.h"
+#include "eprintf.h"
 #include "log.h"
 #include "alloc.h"
 #include "hash.h"

@@ -4,7 +4,6 @@
 
 #include "types.h"
 #include "alloc.h"
-#include "memory.h"
 #include "hash.h"
 #include "object.h"
 #include "table.h"

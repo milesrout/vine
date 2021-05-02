@@ -4,8 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define VINE_NO_POISON
 #include "alloc.h"
-#include "printf.h"
+#undef VINE_NO_POISON
+#include "eprintf.h"
 #include "log.h"
 
 static

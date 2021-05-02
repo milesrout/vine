@@ -1,13 +1,5 @@
-#ifndef VINE__MEMORY_H_INCLUDED
-#error "Must include memory.h before including heapstring.h"
-#endif
-#ifndef VINE_ALLOC_H_INCLUDED
-#error "Must include alloc.h before including heapstring.h"
-#endif
-#ifdef VINE_HEAPSTRING_H_INCLUDED
-#error "May not include heapstring.h more than once"
-#endif
-#define VINE_HEAPSTRING_H_INCLUDED
+//require alloc.h
+//provide heapstring.h
 struct heapstring {
 	size_t hs_cap;
 	char   hs_str[1];

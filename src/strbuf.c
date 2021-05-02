@@ -8,7 +8,7 @@
 #include "abort.h"
 #include "alloc.h"
 #include "strbuf.h"
-#include "printf.h"
+#include "eprintf.h"
 #include "memory.h"
 #include "checked.h"
 

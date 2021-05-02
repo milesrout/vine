@@ -1,13 +1,6 @@
-#ifndef VINE_ALLOC_H_INCLUDED
-#error "Must include alloc.h before including alloc_slab.h"
-#endif
-#ifndef VINE_ALLOC_BUF_H_INCLUDED
-#error "Must include alloc_buf.h before including alloc_slab.h"
-#endif
-#ifdef VINE_ALLOC_SLAB_H_INCLUDED
-#error "May not include alloc_slab.h more than once"
-#endif
-#define VINE_ALLOC_SLAB_H_INCLUDED
+//require alloc.h
+//require alloc_buf.h
+//provide alloc_slab.h
 struct slab {
 	struct slab     *slab_next;
 	struct buf_alloc slab_alloc;

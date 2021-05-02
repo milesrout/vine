@@ -1,7 +1,4 @@
-#ifdef VINE_RANDOM_H_INCLUDED
-#error "May not include random.h more than once"
-#endif
-#define VINE_RANDOM_H_INCLUDED
+//provide random.h
 struct rng {
 	u64 rng_state;
 	u64 rng_stream;

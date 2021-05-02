@@ -1,10 +1,5 @@
-#ifndef VINE_PRINTF_H_INCLUDED
-#error "Must include printf.h before including log.h"
-#endif
-#ifdef VINE_LOG_H_INCLUDED
-#error "May not include log.h more than once"
-#endif
-#define VINE_LOG_H_INCLUDED
+//require eprintf.h
+//provide log.h
 enum log_level {
 	LOG_EMERG,
 	LOG_ALERT,

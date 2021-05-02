@@ -1,13 +1,6 @@
-#ifndef VINE_ALLOC_H_INCLUDED
-#error "Must include alloc.h before including object.h"
-#endif
-#ifndef VINE_HASH_H_INCLUDED
-#error "Must include hash.h before including object.h"
-#endif
-#ifdef VINE_OBJECT_H_INCLUDED
-#error "May not include object.h more than once"
-#endif
-#define VINE_OBJECT_H_INCLUDED
+//require alloc.h
+//require hash.h
+//provide object.h
 struct object_vtable {
 	const char *(*ovt_typename)(struct object_vtable **);
 	u64 (*ovt_hash)(struct object_vtable **);

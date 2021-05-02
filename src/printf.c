@@ -5,7 +5,8 @@
 #include <string.h>
 
 #include "abort.h"
-#include "_printf.h"
+#define VINE_NO_POISON
+#include "eprintf.h"
 
 void
 evfprintf(FILE *file, const char *fmt, va_list args)

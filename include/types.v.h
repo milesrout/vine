@@ -1,7 +1,4 @@
-#ifdef VINE_TYPES_H_INCLUDED
-#error "May not include types.h more than once"
-#endif
-#define VINE_TYPES_H_INCLUDED
+//provide types.h
 typedef int8_t  z8;
 typedef int16_t z16;
 typedef int32_t z32;

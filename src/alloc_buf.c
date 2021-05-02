@@ -5,13 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef VINE_USE_VALGRIND
+#ifdef USE_VALGRIND
 #include <valgrind/valgrind.h>
 #endif
 
 #include "checked.h"
 #include "memory.h"
-#include "printf.h"
+#include "eprintf.h"
 #include "log.h"
 #include "alloc.h"
 #include "alloc_buf.h"

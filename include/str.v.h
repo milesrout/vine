@@ -1,10 +1,5 @@
-#ifndef VINE_ALLOC_H_INCLUDED
-#error "Must include alloc.h before including str.h"
-#endif
-#ifdef VINE_STR_H_INCLUDED
-#error "May not include str.h more than once"
-#endif
-#define VINE_STR_H_INCLUDED
+//require alloc.h
+//provide str.h
 struct strview {
 	struct string  *sv_string;
 	size_t          sv_len;

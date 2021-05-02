@@ -1,10 +1,5 @@
-#ifndef VINE_ALLOC_H_INCLUDED
-#error "Must include alloc.h before including strbuf.h"
-#endif
-#ifdef VINE_STRBUF_H_INCLUDED
-#error "May not include strbuf.h more than once"
-#endif
-#define VINE_STRBUF_H_INCLUDED
+//require alloc.h
+//provide strbuf.h
 struct strbuf {
 	size_t        sb_len;
 	size_t        sb_cap;

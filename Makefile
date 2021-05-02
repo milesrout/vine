@@ -2,7 +2,7 @@ ifeq ($(BUILD),release)
 	CFLAGS += -O3 -s -DNDEBUG -fno-delete-null-pointer-checks
 	LDFLAGS += -flto
 else ifeq ($(BUILD),valgrind)
-	CFLAGS += -Og -g -Werror -DVINE_USE_VALGRIND
+	CFLAGS += -Og -g -Werror -DUSE_VALGRIND
 else ifeq ($(BUILD),sanitise)
 	CFLAGS += -Og -g -Werror -fsanitize=address -fsanitize=undefined
 	LDFLAGS += -lasan -lubsan
@@ -20,9 +20,10 @@ TARGET    := vine
 SRCS      := $(shell find src -name *.c -or -name *.S)
 OBJS      := $(SRCS:%=build/$(BUILD)/%.o)
 DEPS      := $(OBJS:%.o=%.d)
+VHDRS     := $(shell find include -name *.v.h)
+HDRS      := $(VHDRS:%.v.h=build/$(BUILD)/%.h)
 
-#INCS      := $(addprefix -I,$(shell find ./include -type d))
-INCS      := -I./include
+INCS      := -I./build/$(BUILD)/include
 
 WARNINGS  += -pedantic -pedantic-errors -Wno-overlength-strings
 WARNINGS  += -fmax-errors=5 -Wall -Wextra -Wdouble-promotion -Wformat=2
@@ -42,7 +43,7 @@ WARNINGS  += -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes
 WARNINGS  += -Wmissing-declarations -Wnormalized=nfkc -Wredundant-decls
 WARNINGS  += -Wnested-externs -fanalyzer
 
-CFLAGS    += -D_GNU_SOURCE -D_FORTIFY_SOURCE=2 $(INCS) -MMD -MP -std=c89
+CFLAGS    += -D_GNU_SOURCE -D_FORTIFY_SOURCE=2 $(INCS) -std=c89
 CFLAGS    += -fPIE -ftrapv -fstack-protector $(WARNINGS)
 
 LDFLAGS   += -pie -fPIE
@@ -59,6 +60,16 @@ build/$(BUILD)/$(TARGET): $(OBJS)
 	@echo '  LD      ' $@
 	@$(CC) $(OBJS) -o $@ $(LDFLAGS) $(LDLIBS)
 
+build/$(BUILD)/%.c.d: %.c
+	@mkdir -p $(dir $@)
+	@# This isn't typically very interesting
+	@#echo '  CC [D]  ' $<.d
+	@$(CC) -c $(CFLAGS) $< -MM -MG -MF - | tee $@.tmp | \
+		sed -E -e 's#build/$(BUILD)/include/##g' | \
+		sed -E -e 's#\b(\w|\.)*\.h\b#build/$(BUILD)/include/\0#g' | \
+		sed -E -e 's#\b((\w|\.)*)\.o\b#build/$(BUILD)/src/\1.c.o#' \
+		> $@
+
 build/$(BUILD)/%.c.o: %.c
 	@mkdir -p $(dir $@)
 	@echo '  CC      ' $<.o
@@ -69,6 +80,11 @@ build/$(BUILD)/%.S.o: %.S
 	@echo '  AS      ' $<.o
 	@$(AS) $(ASFLAGS) $< -o $@
 
+build/$(BUILD)/%.h: %.v.h
+	@mkdir -p $(dir $@)
+	@echo '  AWK     ' ${<:%.v.h=%.h}
+	@awk -S -f vineinclude.awk $< > $@
+
 tags: $(SRCS)
 	gcc -M $(INCS) $(SRCS) | sed -e 's/[\ ]/\n/g' | \
 		sed -e '/^$$/d' -e '/\.o:[ \t]*$$/d' | \
@@ -77,13 +93,13 @@ tags: $(SRCS)
 
 .PHONY: clean cleanall syntastic debug release valgrind sanitise
 clean:
-	$(RM) build/$(TARGET) $(OBJS) $(DEPS)
+	$(RM) build/$(TARGET) $(OBJS) $(DEPS) $(HDRS)
 
 cleanall: clean
-	$(RM) -r build/{debug,release,valgrind,sanitise}/*
+	$(RM) -r build/*/*
 
 syntastic:
-	echo $(CFLAGS) | tr ' ' '\n' | grep -v 'MMD\|MP\|max-errors' > .syntastic_c_config
+	echo $(CFLAGS) | tr ' ' '\n' | grep -v 'max-errors' > .syntastic_c_config
 
 release:
 	-$(MAKE) "BUILD=release"
@@ -101,5 +117,7 @@ debug:
 	./build/debug/$(TARGET)
 
 ifneq ($(MAKECMDGOALS),clean)
+ifneq ($(MAKECMDGOALS),cleanall)
 -include $(DEPS)
+endif
 endif

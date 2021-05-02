@@ -1,8 +1,9 @@
-#include "abort.h"
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "abort.h"
+#include "alloc.h"
 
 void
 abort_with_error(const char *fmt, ...)

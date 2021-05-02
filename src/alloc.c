@@ -1,11 +1,13 @@
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
-#include "memory.h"
-#include "alloc.h"
 #include "abort.h"
 #include "checked.h"
+#define VINE_NO_POISON
+#include "alloc.h"
 
 void *
 allocate_with(struct alloc *alloc, size_t m)
@@ -85,4 +87,34 @@ void
 deallocarray_with(struct alloc *alloc, void *p, size_t m, size_t n)
 {
 	deallocate_with(alloc, p, mul_sz(m, n));
+}
+
+void *
+try_allocate(size_t m)
+{
+	return try_allocate_with(&sys_alloc, m);
+}
+
+void *
+allocate(size_t m)
+{
+	return allocate_with(&sys_alloc, m);
+}
+
+void *
+try_reallocate(void *q, size_t m, size_t n)
+{
+	return try_reallocate_with(&sys_alloc, q, m, n);
+}
+
+void *
+reallocate(void *q, size_t m, size_t n)
+{
+	return reallocate_with(&sys_alloc, q, m, n);
+}
+
+void
+deallocate(void *p, size_t m)
+{
+	deallocate_with(&sys_alloc, p, m);
 }

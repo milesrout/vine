@@ -8,12 +8,12 @@
 #include "util.h"
 #include "alloc.h"
 #include "fibre.h"
-#include "printf.h"
+#include "eprintf.h"
 #include "abort.h"
 #include "log.h"
 #include "memory.h"
 
-#ifdef VINE_USE_VALGRIND
+#ifdef USE_VALGRIND
 #include <valgrind/valgrind.h>
 #endif
 
@@ -77,7 +77,7 @@ struct fibre {
 	struct fibre_ctx f_ctx;
 	short f_state;
 	short f_prio;
-#ifdef VINE_USE_VALGRIND
+#ifdef USE_VALGRIND
 	unsigned f_valgrind_id;
 #else
 	unsigned reserved[1];
@@ -415,7 +415,7 @@ fibre_return(void)
 		 * Or we need to hardcode the use of the mmap allocator for
 		 * allocating stacks.
 		 */
-#ifdef VINE_USE_VALGRIND
+#ifdef USE_VALGRIND
 		VALGRIND_STACK_DEREGISTER(current_fibre->f_valgrind_id);
 #endif
 		fibre_yield();
@@ -458,13 +458,13 @@ fibre_yield(void)
 	log_debug("fibre", "Yielding from fibre %p to fibre %p.\n",
 	                   (void *)old_fibre,
 	                   (void *)current_fibre);
-#ifdef VINE_USE_VALGRIND
+#ifdef USE_VALGRIND
 	current_fibre->f_valgrind_id = VALGRIND_STACK_REGISTER(
 		current_fibre->f_stack,
 		current_fibre->f_stack + global_fibre_store.fs_stack_size);
 #endif
 	fibre_switch(old, new);
-#ifdef VINE_USE_VALGRIND
+#ifdef USE_VALGRIND
 	VALGRIND_STACK_DEREGISTER(old_fibre->f_valgrind_id);
 #endif
 	return 1;
@@ -493,7 +493,7 @@ fibre_go(void (*f)(void))
 	} else {
 		stack = fibre->f_stack;
 	}
-#ifdef VINE_USE_VALGRIND
+#ifdef USE_VALGRIND
 	fibre->f_valgrind_id = VALGRIND_STACK_REGISTER(stack, stack + size);
 #endif
 

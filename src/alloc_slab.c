@@ -6,12 +6,12 @@
 #include <string.h>
 #include <sys/mman.h>
 
-#ifdef VINE_USE_VALGRIND
+#ifdef USE_VALGRIND
 #include <valgrind/valgrind.h>
 #endif
 
 #include "abort.h"
-#include "printf.h"
+#include "eprintf.h"
 #include "alloc.h"
 #include "alloc_buf.h"
 #include "alloc_slab.h"

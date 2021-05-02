@@ -6,17 +6,14 @@
  * define the macro if printf.h hasn't been included yet and undefine it at the
  * end of the header.
  */
-#ifndef VINE_PRINTF_H_INCLUDED
+#ifndef VINE_EPRINTF_H_INCLUDED
 #ifdef __GNUC__
 #define attribute_format_printf(a, b) __attribute__((format(printf, a, b)))
 #else
 #define attribute_format_printf(a, b)
 #endif
 #endif
-#ifdef VINE_ABORT_H_INCLUDED
-#error "May not include abort.h more than once"
-#endif
-#define VINE_ABORT_H_INCLUDED
+//provide abort.h
 #ifdef __GNUC__
 #define attribute_noreturn __attribute__((noreturn))
 #else
@@ -32,6 +29,6 @@ attribute_format_printf(1, 2) extern void abort_with_error(const char *fmt, ...)
 #endif
 #define assertiff(cond1, cond2)     do { assertimpl(cond1, cond2); assertimpl(cond2, cond1); } while (0)
 #define assertimpl(cond1, cond2)    assert2(((!!(cond1)) ? (cond2) : 1), "expected `" #cond2 "' to be true whenever `" #cond1 "' is true")
-#ifndef VINE_PRINTF_H_INCLUDED
+#ifndef VINE_EPRINTF_H_INCLUDED
 #undef attribute_format_printf
 #endif
