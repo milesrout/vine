@@ -1,38 +1,4 @@
 VINE: VIVE Is Not Emacs
 VIVE: VINE Isn't Vim Either
 
-VINE is that rarest of beasts: a doubly recursive acronym. It's also a text
-editor. The command is 'vine', the language is 'Vine', the acronym is 'VINE'.
-
-vine, like all good text editors, is also an operating system, a programming
-language, a scripting language, a virtual machine, a window manager and a
-computer use philosophy.
-
-The goal of the VINE project is to develop a text editor that is as powerful as
-Emacs but with vi's command philosophy applied throughout. Programs are modal,
-and the way we interact with them should reflect that. Extensions for Emacs
-that replace a lot of the default keyboard shortcuts with vi-style bindings
-don't address that discrepency. They also don't take into account modern
-computers, which are highly parallel and connected. Emacs with a 'vi bindings'
-mode isn't a modern, modal, secure, connected, concurrent and fast text editor.
-It isn't a great mail client. It isn't a great window manager. It isn't even a
-very good text editor. vine aims to be all of those things.
-
-Like Emacs, vine will be written mostly in a new programming language. This
-language will be called Vine. Vine will be a safe, portable, easy-to-use
-programming language. It will be just-in-time compiled to machine code. It will
-be a proper programming language, with all the facilities of a normal
-programming language. Vine will not take great leaps and strides in programming
-language design. It will not attempt to integrate cutting edge programming
-languages research, as fun and interesting as that is. It will just be a fast,
-usable, safe language. Vine will be implemented in C, a language that will
-continue to be relevant for decades to come.
-
-If vine will be all that, what will it not be? It will be a virtual machine, a
-just-in-time compiler, an ahead-of-time compiler, a command language, a web
-browser (and thus another compiler), a mail client, a UI toolkit, an operating
-system, a process supervisor, a window manager, a file system, a repl, a
-debugger, a PDF viewer, and, oh, a text editor too. What won't it be? It won't
-be an integrated, inescapable ecosystem. Every part of vine can be used on its
-own. vine is interoperable, using standard inter-process communication
-mechanisms.
+VINE is a doubly recursive acronym. It's also a text editor.
